@@ -19,7 +19,18 @@ if (!stripeSecretKey) {
     'STRIPE_SECRET_KEY is not configured. Billing/Stripe operations will fail until it is set.'
   );
 }
-const stripe = new Stripe(stripeSecretKey || 'sk_test_postiz_placeholder');
+const stripe = stripeSecretKey
+  ? new Stripe(stripeSecretKey)
+  : (new Proxy(
+      {},
+      {
+        get() {
+          throw new Error(
+            'Stripe is disabled because STRIPE_SECRET_KEY is not configured.'
+          );
+        },
+      }
+    ) as Stripe);
 
 @Injectable()
 export class StripeService {
