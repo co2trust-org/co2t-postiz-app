@@ -12,7 +12,14 @@ import { TrackService } from '@gitroom/nestjs-libraries/track/track.service';
 import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
 import { TrackEnum } from '@gitroom/nestjs-libraries/user/track.enum';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY?.trim();
+if (!stripeSecretKey) {
+  // Keep the app bootable when billing is not configured yet (e.g. fresh self-hosted deploys).
+  console.warn(
+    'STRIPE_SECRET_KEY is not configured. Billing/Stripe operations will fail until it is set.'
+  );
+}
+const stripe = new Stripe(stripeSecretKey || 'sk_test_postiz_placeholder');
 
 @Injectable()
 export class StripeService {
