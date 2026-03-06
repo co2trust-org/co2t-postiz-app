@@ -1,6 +1,6 @@
 [phases.setup]
     nixPkgs = ['nodejs', 'python3']
-    aptPkgs = ['build-essential', 'libudev-dev', 'nginx']
+    aptPkgs = ['build-essential', 'libudev-dev']
 
 [deploy]
     startCommand = 'pnpm run start:railway'
