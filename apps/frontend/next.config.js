@@ -54,7 +54,13 @@ const nextConfig = {
     ];
   },
   async rewrites() {
+    const backendInternalUrl =
+      process.env.BACKEND_INTERNAL_URL || 'http://localhost:3000';
     return [
+      {
+        source: '/api/:path*',
+        destination: `${backendInternalUrl}/:path*`,
+      },
       {
         source: '/uploads/:path*',
         destination:

@@ -19,7 +19,7 @@
     "publish-cli": "pnpm run --filter ./apps/cli publish",
     "pm2-run": "pnpm exec pm2 delete all || true && pnpm run prisma-db-push && pnpm run --parallel pm2 && pnpm exec pm2 logs",
     "pm2-run:railway": "pnpm exec pm2 delete all || true && pnpm run prisma-db-push && BACKEND_PORT=3000 pnpm run --parallel pm2 && pnpm exec pm2 logs",
-    "start:railway": "PORT=${PORT:-5000} && sed \"s/__PORT__/${PORT}/g\" ./var/docker/nginx.railway.conf > /tmp/nginx.conf && nginx -c /tmp/nginx.conf && pnpm run pm2-run:railway",
+    "start:railway": "pnpm run pm2-run:railway",
     "dev:stripe": "pnpm dlx concurrently \"stripe listen --forward-to localhost:3000/stripe\" \"pnpm run dev\"",
     "build": "pnpm -r --workspace-concurrency=1 --filter ./apps/frontend --filter ./apps/backend --filter ./apps/orchestrator run build",
     "build:backend": "rm -rf apps/backend/dist && pnpm --filter ./apps/backend run build",
