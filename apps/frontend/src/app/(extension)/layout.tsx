@@ -8,6 +8,7 @@ import { Plus_Jakarta_Sans } from 'next/font/google';
 import clsx from 'clsx';
 import { VariableContextComponent } from '@gitroom/react/helpers/variable.context';
 import UtmSaver from '@gitroom/helpers/utils/utm.saver';
+import { resolvePublicBackendUrl } from '@gitroom/frontend/app/backend.url';
 
 const jakartaSans = Plus_Jakarta_Sans({
   weight: ['600', '500'],
@@ -16,6 +17,7 @@ const jakartaSans = Plus_Jakarta_Sans({
 });
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
+  const backendUrl = resolvePublicBackendUrl();
   return (
     <html>
       <head>
@@ -31,7 +33,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           }
           stripeClient=""
           environment={process.env.NODE_ENV!}
-          backendUrl={process.env.NEXT_PUBLIC_BACKEND_URL || '/api'}
+          backendUrl={backendUrl}
           plontoKey={process.env.NEXT_PUBLIC_POLOTNO!}
           billingEnabled={!!process.env.STRIPE_PUBLISHABLE_KEY}
           discordUrl={process.env.NEXT_PUBLIC_DISCORD_SUPPORT!}
