@@ -1,9 +1,11 @@
-import { Global, Injectable, Module, OnModuleInit } from '@nestjs/common';
+import { Global, Injectable, Logger, Module, OnModuleInit } from '@nestjs/common';
 import { TemporalService } from 'nestjs-temporal-core';
 import { Connection } from '@temporalio/client';
 
 @Injectable()
 export class TemporalRegister implements OnModuleInit {
+  private readonly _logger = new Logger(TemporalRegister.name);
+
   constructor(private _client: TemporalService) {}
 
   async onModuleInit(): Promise<void> {
@@ -13,25 +15,32 @@ export class TemporalRegister implements OnModuleInit {
     const connection = this._client?.client?.getRawClient()
       ?.connection as Connection;
 
-    const { customAttributes } =
-      await connection.operatorService.listSearchAttributes({
-        namespace: process.env.TEMPORAL_NAMESPACE || 'default',
+    try {
+      const { customAttributes } =
+        await connection.operatorService.listSearchAttributes({
+          namespace: process.env.TEMPORAL_NAMESPACE || 'default',
+        });
+
+      const neededAttribute = ['organizationId', 'postId'];
+      const missingAttributes = neededAttribute.filter(
+        (attr) => !customAttributes[attr]
       });
 
-    const neededAttribute = ['organizationId', 'postId'];
-    const missingAttributes = neededAttribute.filter(
-      (attr) => !customAttributes[attr]
-    );
-
-    if (missingAttributes.length > 0) {
-      await connection.operatorService.addSearchAttributes({
-        namespace: process.env.TEMPORAL_NAMESPACE || 'default',
-        searchAttributes: missingAttributes.reduce((all, current) => {
-          // @ts-ignore
-          all[current] = 1;
-          return all;
-        }, {}),
-      });
+      if (missingAttributes.length > 0) {
+        await connection.operatorService.addSearchAttributes({
+          namespace: process.env.TEMPORAL_NAMESPACE || 'default',
+          searchAttributes: missingAttributes.reduce((all, current) => {
+            // @ts-ignore
+            all[current] = 1;
+            return all;
+          }, {}),
+        });
+      }
+    } catch (error: any) {
+      // Keep backend booting when Temporal is unavailable (e.g. single-container installs).
+      this._logger.warn(
+        `Skipping Temporal search attribute registration: ${error?.message || error}`
+      );
     }
   }
 }
