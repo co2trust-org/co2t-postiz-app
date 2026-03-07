@@ -131,8 +131,16 @@ export function RegisterAfter({
             }
           });
         } else {
+          const contentType = response.headers.get('content-type') || '';
+          const responseText = await response.text();
+          const isHtmlResponse =
+            contentType.includes('text/html') ||
+            responseText.toLowerCase().includes('<!doctype html');
           form.setError('email', {
-            message: await response.text(),
+            message: isHtmlResponse
+              ? getHelpfulReasonForRegistrationFailure(response.status)
+              : responseText ||
+                getHelpfulReasonForRegistrationFailure(response.status),
           });
         }
       })
