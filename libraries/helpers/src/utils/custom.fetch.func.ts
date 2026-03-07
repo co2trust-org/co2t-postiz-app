@@ -87,6 +87,10 @@ export const customFetch = (
 
 export const fetchBackend = customFetch({
   get baseUrl() {
-    return process.env.BACKEND_URL!;
+    return (
+      process.env.BACKEND_URL ||
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      '/api'
+    );
   },
 });

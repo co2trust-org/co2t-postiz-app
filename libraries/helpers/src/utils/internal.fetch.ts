@@ -3,7 +3,7 @@ import { customFetch } from '@gitroom/helpers/utils/custom.fetch.func';
 
 export const internalFetch = (url: string, options: RequestInit = {}) =>
   customFetch(
-    { baseUrl: process.env.BACKEND_INTERNAL_URL! },
+    { baseUrl: process.env.BACKEND_INTERNAL_URL || 'http://localhost:3000' },
     cookies()?.get('auth')?.value!,
     cookies()?.get('showorg')?.value!
   )(url, options);
