@@ -1,6 +1,27 @@
 // @ts-check
 import { withSentryConfig } from '@sentry/nextjs';
 
+const resolveBackendInternalUrl = () => {
+  const fallback = 'http://localhost:3000';
+  const configured = process.env.BACKEND_INTERNAL_URL || fallback;
+
+  try {
+    const configuredUrl = new URL(configured);
+    const frontendUrl = process.env.FRONTEND_URL
+      ? new URL(process.env.FRONTEND_URL)
+      : null;
+
+    // Prevent self-proxy loops when misconfigured to public frontend domain.
+    if (frontendUrl && configuredUrl.host === frontendUrl.host) {
+      return fallback;
+    }
+
+    return configured;
+  } catch {
+    return fallback;
+  }
+};
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
@@ -54,7 +75,12 @@ const nextConfig = {
     ];
   },
   async rewrites() {
+    const backendInternalUrl = resolveBackendInternalUrl();
     return [
+      {
+        source: '/api/:path*',
+        destination: `${backendInternalUrl}/:path*`,
+      },
       {
         source: '/uploads/:path*',
         destination:
