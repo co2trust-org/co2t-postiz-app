@@ -45,7 +45,13 @@ async function start() {
     },
   });
 
-  await startMcp(app);
+  // Optional MCP bootstrap can block API readiness in constrained deployments.
+  // Allow disabling it via env so core app routes still come up.
+  if (process.env.DISABLE_MCP === 'true') {
+    Logger.warn('MCP bootstrap disabled via DISABLE_MCP');
+  } else {
+    await startMcp(app);
+  }
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -68,7 +74,8 @@ async function start() {
 
   loadSwagger(app);
 
-  const port = process.env.PORT || 3000;
+  // Railway may override PORT for edge routing; keep backend internal port stable for nginx.
+  const port = process.env.BACK_END_PORT || process.env.PORT || 3000;
 
   try {
     await app.listen(port);
