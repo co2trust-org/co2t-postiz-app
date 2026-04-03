@@ -1,3 +1,7 @@
-[phases.setup]
-    nixPkgs = ['nodejs', 'python3']
-    aptPkgs = ['build-essential', 'libudev-dev']
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.dev"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
