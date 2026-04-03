@@ -17,6 +17,9 @@ import { TemporalRegisterMissingSearchAttributesModule } from '@gitroom/nestjs-l
 import { InfiniteWorkflowRegisterModule } from '@gitroom/nestjs-libraries/temporal/infinite.workflow.register';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
+import { TemporalService } from 'nestjs-temporal-core';
+
+const temporalEnabled = process.env.TEMPORAL_OPTIONAL !== 'true';
 
 @Global()
 @Module({
@@ -29,9 +32,13 @@ import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
     ThirdPartyModule,
     VideoModule,
     ChatModule,
-    getTemporalModule(false),
-    TemporalRegisterMissingSearchAttributesModule,
-    InfiniteWorkflowRegisterModule,
+    ...(temporalEnabled
+      ? [
+          getTemporalModule(false),
+          TemporalRegisterMissingSearchAttributesModule,
+          InfiniteWorkflowRegisterModule,
+        ]
+      : []),
     ThrottlerModule.forRoot({
       throttlers: [
         {
@@ -53,6 +60,14 @@ import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
       provide: APP_GUARD,
       useClass: PoliciesGuard,
     },
+    ...(temporalEnabled
+      ? []
+      : [
+          {
+            provide: TemporalService,
+            useValue: {} as TemporalService,
+          },
+        ]),
   ],
   exports: [
     DatabaseModule,
