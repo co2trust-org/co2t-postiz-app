@@ -2,6 +2,15 @@ import { Global, Injectable, Logger, Module, OnModuleInit } from '@nestjs/common
 import { TemporalService } from 'nestjs-temporal-core';
 import { Connection } from '@temporalio/client';
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Temporal call timed out after ${timeoutMs}ms`)), timeoutMs)
+    ),
+  ]);
+}
+
 @Injectable()
 export class TemporalRegister implements OnModuleInit {
   constructor(private _client: TemporalService) {}
@@ -19,10 +28,12 @@ export class TemporalRegister implements OnModuleInit {
         return;
       }
 
-      const { customAttributes } =
-        await connection.operatorService.listSearchAttributes({
+      const { customAttributes } = await withTimeout(
+        connection.operatorService.listSearchAttributes({
           namespace: process.env.TEMPORAL_NAMESPACE || 'default',
-        });
+        }),
+        5000
+      );
 
       const neededAttribute = ['organizationId', 'postId'];
       const missingAttributes = neededAttribute.filter(
@@ -30,14 +41,17 @@ export class TemporalRegister implements OnModuleInit {
       );
 
       if (missingAttributes.length > 0) {
-        await connection.operatorService.addSearchAttributes({
-          namespace: process.env.TEMPORAL_NAMESPACE || 'default',
-          searchAttributes: missingAttributes.reduce((all, current) => {
-            // @ts-ignore
-            all[current] = 1;
-            return all;
-          }, {}),
-        });
+        await withTimeout(
+          connection.operatorService.addSearchAttributes({
+            namespace: process.env.TEMPORAL_NAMESPACE || 'default',
+            searchAttributes: missingAttributes.reduce((all, current) => {
+              // @ts-ignore
+              all[current] = 1;
+              return all;
+            }, {}),
+          }),
+          5000
+        );
       }
     } catch (error) {
       Logger.warn(
