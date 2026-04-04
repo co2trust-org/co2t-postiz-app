@@ -16,7 +16,13 @@ export class TemporalRegister implements OnModuleInit {
   constructor(private _client: TemporalService) {}
 
   async onModuleInit(): Promise<void> {
-    if (process.env.TEMPORAL_TLS === 'true') {
+    if (
+      process.env.TEMPORAL_TLS === 'true' ||
+      process.env.SKIP_TEMPORAL_BOOTSTRAP === 'true'
+    ) {
+      if (process.env.SKIP_TEMPORAL_BOOTSTRAP === 'true') {
+        Logger.warn('Temporal search attribute bootstrap skipped via SKIP_TEMPORAL_BOOTSTRAP');
+      }
       return;
     }
     try {

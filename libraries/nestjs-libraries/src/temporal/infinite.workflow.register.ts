@@ -15,6 +15,10 @@ export class InfiniteWorkflowRegister implements OnModuleInit {
   constructor(private _temporalService: TemporalService) {}
 
   async onModuleInit(): Promise<void> {
+    if (process.env.SKIP_TEMPORAL_BOOTSTRAP === 'true') {
+      return;
+    }
+
     if (!!process.env.RUN_CRON) {
       try {
         const workflowStartPromise = this._temporalService.client
