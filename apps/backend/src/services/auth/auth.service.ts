@@ -70,12 +70,21 @@ export class AuthService {
             : false;
 
         const obj = { addedOrg, jwt: await this.jwt(create.users[0].user) };
-        await this._emailService.sendEmail(
-          body.email,
-          'Activate your account',
-          `Click <a href="${process.env.FRONTEND_URL}/auth/activate/${obj.jwt}">here</a> to activate your account`,
-          'top'
-        );
+        // Only enqueue activation email when an email provider is configured.
+        // Without this guard, registration can hang on Temporal email workflow
+        // even though the account is already auto-activated.
+        if (this._emailService.hasProvider()) {
+          try {
+            await this._emailService.sendEmail(
+              body.email,
+              'Activate your account',
+              `Click <a href="${process.env.FRONTEND_URL}/auth/activate/${obj.jwt}">here</a> to activate your account`,
+              'top'
+            );
+          } catch (err) {
+            // Email delivery should not block signup.
+          }
+        }
         return obj;
       }
 
