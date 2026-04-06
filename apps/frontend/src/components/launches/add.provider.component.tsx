@@ -35,6 +35,30 @@ export const useAddProvider = (update?: () => void, invite?: boolean) => {
     });
   }, []);
 };
+
+export const useAddProviderAndConnect = (
+  identifier: string,
+  update?: () => void
+) => {
+  const modal = useModals();
+  const fetch = useFetch();
+
+  return useCallback(async () => {
+    const data = await (await fetch('/integrations')).json();
+    modal.openModal({
+      title: 'Add Channel',
+      withCloseButton: true,
+      children: (
+        <AddProviderComponent
+          invite={false}
+          update={update}
+          autoConnectIdentifier={identifier}
+          {...data}
+        />
+      ),
+    });
+  }, [identifier, update]);
+};
 export const AddProviderButton: FC<{
   update?: () => void;
 }> = (props) => {
@@ -380,8 +404,9 @@ export const AddProviderComponent: FC<{
   invite: boolean;
   update?: () => void;
   onboarding?: boolean;
+  autoConnectIdentifier?: string;
 }> = (props) => {
-  const { update, social, article, onboarding } = props;
+  const { update, social, article, onboarding, autoConnectIdentifier } = props;
   const { isGeneral, extensionId } = useVariables();
   const toaster = useToaster();
   const router = useRouter();
@@ -606,6 +631,29 @@ export const AddProviderComponent: FC<{
       },
     [onboarding]
   );
+
+  useEffect(() => {
+    if (!autoConnectIdentifier || props.invite) {
+      return;
+    }
+
+    const provider = social.find(
+      (item) => item.identifier === autoConnectIdentifier
+    );
+
+    if (!provider) {
+      return;
+    }
+
+    getSocialLink(
+      false,
+      provider.identifier,
+      provider.isExternal,
+      provider.isWeb3,
+      provider.isChromeExtension,
+      provider.customFields
+    )();
+  }, [autoConnectIdentifier, social, getSocialLink, props.invite]);
 
   const t = useT();
 

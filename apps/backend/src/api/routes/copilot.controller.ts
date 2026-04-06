@@ -30,12 +30,27 @@ export type ChannelsContext = {
   ui: string;
 };
 
+const ALLOWED_OPENAI_MODELS = ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano'];
+const DEFAULT_OPENAI_MODEL = 'gpt-4.1';
+
 @Controller('/copilot')
 export class CopilotController {
   constructor(
     private _subscriptionService: SubscriptionService,
     private _mastraService: MastraService
   ) {}
+
+  private resolveRequestedModel(req: Request): string {
+    const requestedModel = req?.body?.variables?.properties?.aiModel;
+    if (
+      typeof requestedModel === 'string' &&
+      ALLOWED_OPENAI_MODELS.includes(requestedModel)
+    ) {
+      return requestedModel;
+    }
+    return DEFAULT_OPENAI_MODEL;
+  }
+
   @Post('/chat')
   chatAgent(@Req() req: Request, @Res() res: Response) {
     if (
@@ -45,12 +60,13 @@ export class CopilotController {
       Logger.warn('OpenAI API key not set, chat functionality will not work');
       return;
     }
+    const model = this.resolveRequestedModel(req);
 
     const copilotRuntimeHandler = copilotRuntimeNodeHttpEndpoint({
       endpoint: '/copilot/chat',
       runtime: new CopilotRuntime(),
       serviceAdapter: new OpenAIAdapter({
-        model: 'gpt-4.1',
+        model,
       }),
     });
 
@@ -80,6 +96,7 @@ export class CopilotController {
 
     requestContext.set('organization', JSON.stringify(organization));
     requestContext.set('ui', 'true');
+    const model = this.resolveRequestedModel(req);
 
     const agents = MastraAgent.getLocalAgents({
       resourceId: organization.id,
@@ -96,7 +113,7 @@ export class CopilotController {
       runtime,
       // properties: req.body.variables.properties,
       serviceAdapter: new OpenAIAdapter({
-        model: 'gpt-4.1',
+        model,
       }),
     });
 
