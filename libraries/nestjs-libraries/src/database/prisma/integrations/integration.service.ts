@@ -23,6 +23,7 @@ import { PlugDto } from '@gitroom/nestjs-libraries/dtos/plugs/plug.dto';
 import { difference, uniq } from 'lodash';
 import utc from 'dayjs/plugin/utc';
 import { AutopostRepository } from '@gitroom/nestjs-libraries/database/prisma/autopost/autopost.repository';
+import { shouldStoreIntegrationPictureUrlAsIs } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.picture.url';
 import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
 import { TemporalService } from 'nestjs-temporal-core';
 
@@ -111,7 +112,8 @@ export class IntegrationService {
     customInstanceDetails?: string
   ) {
     const uploadedPicture = picture
-      ? picture?.indexOf('imagedelivery.net') > -1
+      ? shouldStoreIntegrationPictureUrlAsIs(picture) ||
+        picture.indexOf('imagedelivery.net') > -1
         ? picture
         : await this.storage.uploadSimple(picture)
       : undefined;
