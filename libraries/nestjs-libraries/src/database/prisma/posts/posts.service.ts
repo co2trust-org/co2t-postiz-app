@@ -1,10 +1,13 @@
 import {
   BadRequestException,
   Injectable,
+  NotFoundException,
   ValidationPipe,
 } from '@nestjs/common';
 import { PostsRepository } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.repository';
 import { CreatePostDto } from '@gitroom/nestjs-libraries/dtos/posts/create.post.dto';
+import { PatchPostDto } from '@gitroom/nestjs-libraries/dtos/posts/patch.post.dto';
+import { CalendarRebalanceDto } from '@gitroom/nestjs-libraries/dtos/posts/calendar.rebalance.dto';
 import dayjs from 'dayjs';
 import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
 import { Integration, Post, Media, From, State } from '@prisma/client';
@@ -734,46 +737,304 @@ export class PostsService {
   async createPost(orgId: string, body: CreatePostDto): Promise<any[]> {
     const postList = [];
     for (const post of body.posts) {
-      const messages = (post.value || []).map((p) => p.content);
-      const updateContent = !body.shortLink
-        ? messages
-        : await this._shortLinkService.convertTextToShortLinks(orgId, messages);
+      const publishDateStr =
+        body.type === 'now'
+          ? dayjs().format('YYYY-MM-DDTHH:mm:00')
+          : body.date;
+      const idempoKey = body.idempotencyKey?.trim();
+      const useIdempotency =
+        !!idempoKey && body.type !== 'update' && body.posts.length === 1;
+      const publishAtBucket = dayjs.utc(publishDateStr).startOf('minute').toDate();
 
-      post.value = (post.value || []).map((p, i) => ({
-        ...p,
-        content: updateContent[i],
-      }));
-
-      const { posts } = await this._postRepository.createOrUpdatePost(
-        body.type,
-        orgId,
-        body.type === 'now' ? dayjs().format('YYYY-MM-DDTHH:mm:00') : body.date,
-        post,
-        body.tags,
-        body.inter
-      );
-
-      if (!posts?.length) {
-        return [] as any[];
-      }
-
-      if (body.type !== 'update') {
-        this.startWorkflow(
-          post.settings.__type.split('-')[0].toLowerCase(),
-          posts[0].id,
+      let slotClaimed = false;
+      if (useIdempotency) {
+        const existingRow = await this._postRepository.findIdempotencyRow(
           orgId,
-          posts[0].state
-        ).catch((err) => {});
+          idempoKey!,
+          post.integration.id,
+          publishAtBucket
+        );
+        if (existingRow?.rootPostId) {
+          const root = await this._postRepository.getPostById(
+            existingRow.rootPostId,
+            orgId
+          );
+          if (root && !root.deletedAt) {
+            postList.push({
+              postId: existingRow.rootPostId,
+              integration: post.integration.id,
+              idempotentReplay: true,
+            });
+            continue;
+          }
+        }
+
+        const claimed = await this._postRepository.tryClaimIdempotencySlot({
+          organizationId: orgId,
+          idempotencyKey: idempoKey!,
+          integrationId: post.integration.id,
+          publishAtBucket,
+        });
+        if (!claimed) {
+          const deadline = Date.now() + 15_000;
+          let row = await this._postRepository.findIdempotencyRow(
+            orgId,
+            idempoKey!,
+            post.integration.id,
+            publishAtBucket
+          );
+          while (Date.now() < deadline && row && !row.rootPostId) {
+            await timer(100);
+            row = await this._postRepository.findIdempotencyRow(
+              orgId,
+              idempoKey!,
+              post.integration.id,
+              publishAtBucket
+            );
+          }
+          if (row?.rootPostId) {
+            const root = await this._postRepository.getPostById(
+              row.rootPostId,
+              orgId
+            );
+            if (root && !root.deletedAt) {
+              postList.push({
+                postId: row.rootPostId,
+                integration: post.integration.id,
+                idempotentReplay: true,
+              });
+              continue;
+            }
+          }
+          throw new BadRequestException(
+            'Idempotency conflict: another request is creating this post. Retry shortly.'
+          );
+        }
+        slotClaimed = true;
       }
 
-      Sentry.metrics.count('post_created', 1);
-      postList.push({
-        postId: posts[0].id,
-        integration: post.integration.id,
-      });
+      try {
+        const messages = (post.value || []).map((p) => p.content);
+        const updateContent = !body.shortLink
+          ? messages
+          : await this._shortLinkService.convertTextToShortLinks(orgId, messages);
+
+        post.value = (post.value || []).map((p, i) => ({
+          ...p,
+          content: updateContent[i],
+        }));
+
+        const { posts } = await this._postRepository.createOrUpdatePost(
+          body.type,
+          orgId,
+          publishDateStr,
+          post,
+          body.tags,
+          body.inter
+        );
+
+        if (!posts?.length) {
+          if (slotClaimed) {
+            await this._postRepository.deleteIdempotencySlot(
+              orgId,
+              idempoKey!,
+              post.integration.id,
+              publishAtBucket
+            );
+          }
+          return [] as any[];
+        }
+
+        if (useIdempotency && slotClaimed) {
+          await this._postRepository.setIdempotencyRootPost(
+            orgId,
+            idempoKey!,
+            post.integration.id,
+            publishAtBucket,
+            posts[0].id
+          );
+        }
+
+        if (body.type !== 'update') {
+          this.startWorkflow(
+            post.settings.__type.split('-')[0].toLowerCase(),
+            posts[0].id,
+            orgId,
+            posts[0].state
+          ).catch((err) => {});
+        }
+
+        Sentry.metrics.count('post_created', 1);
+        postList.push({
+          postId: posts[0].id,
+          integration: post.integration.id,
+        });
+      } catch (e) {
+        if (slotClaimed) {
+          await this._postRepository.deleteIdempotencySlot(
+            orgId,
+            idempoKey!,
+            post.integration.id,
+            publishAtBucket
+          );
+        }
+        throw e;
+      }
     }
 
     return postList;
+  }
+
+  async deletePostByPostId(orgId: string, postId: string) {
+    const row = await this._postRepository.getPostById(postId, orgId);
+    if (!row || row.deletedAt) {
+      throw new NotFoundException('Post not found');
+    }
+    return this.deletePost(orgId, row.group);
+  }
+
+  /** Resolves a post id to its group when possible; otherwise treats `param` as a legacy group id. */
+  async deletePostByIdOrGroup(orgId: string, param: string) {
+    const row = await this._postRepository.getPostById(param, orgId);
+    if (row) {
+      if (row.deletedAt) {
+        return { error: true };
+      }
+      return this.deletePost(orgId, row.group);
+    }
+    return this.deletePost(orgId, param);
+  }
+
+  async duplicatePostGroup(orgId: string, rootPostId: string) {
+    const chain = await this.getPostsRecursively(
+      rootPostId,
+      true,
+      orgId,
+      true
+    );
+    if (!chain.length) {
+      throw new NotFoundException('Post not found');
+    }
+    const root = chain[0];
+    if (root.parentPostId) {
+      throw new BadRequestException('Use the root post id of the group');
+    }
+    const mapped = await this.mapTypeToPost(
+      {
+        type: 'draft',
+        shortLink: false,
+        date: dayjs.utc().format('YYYY-MM-DDTHH:mm:00'),
+        tags: [],
+        posts: [
+          {
+            integration: { id: root.integrationId },
+            value: chain.map((p) => ({
+              content: p.content,
+              delay: p.delay || 0,
+              image: JSON.parse(p.image || '[]'),
+            })),
+            settings: JSON.parse(root.settings || '{}'),
+          },
+        ],
+      },
+      orgId
+    );
+    return this.createPost(orgId, mapped);
+  }
+
+  async patchPostGroup(orgId: string, rootPostId: string, patch: PatchPostDto) {
+    const chain = await this.getPostsRecursively(
+      rootPostId,
+      true,
+      orgId,
+      true
+    );
+    if (!chain.length) {
+      throw new NotFoundException('Post not found');
+    }
+    const root = chain[0];
+    if (root.parentPostId) {
+      throw new BadRequestException('Use the root post id of the group');
+    }
+    if (root.state === 'PUBLISHED') {
+      throw new BadRequestException('Cannot edit a published post group');
+    }
+
+    const byId = new Map(chain.map((p) => [p.id, p]));
+
+    if (patch.segments?.length) {
+      for (const seg of patch.segments) {
+        if (!byId.has(seg.id)) {
+          throw new BadRequestException(`Unknown segment id ${seg.id}`);
+        }
+      }
+      for (const seg of patch.segments) {
+        await this._postRepository.updatePostRow(orgId, seg.id, {
+          ...(seg.content !== undefined ? { content: seg.content } : {}),
+          ...(seg.delay !== undefined ? { delay: seg.delay } : {}),
+          ...(seg.image !== undefined
+            ? { image: JSON.stringify(seg.image) }
+            : {}),
+        });
+      }
+    }
+
+    if (patch.settings !== undefined) {
+      const prev = JSON.parse(root.settings || '{}');
+      const merged = {
+        ...prev,
+        ...patch.settings,
+        __type:
+          (patch.settings as any).__type ??
+          prev.__type ??
+          root.integration?.providerIdentifier,
+      };
+      await this._postRepository.updateGroupSettings(
+        orgId,
+        root.group,
+        JSON.stringify(merged)
+      );
+    }
+
+    if (patch.publishDate) {
+      const action = patch.dateAction ?? 'update';
+      for (const p of chain) {
+        await this._postRepository.changeDate(
+          orgId,
+          p.id,
+          patch.publishDate,
+          p.state === 'DRAFT',
+          action
+        );
+      }
+      if (patch.rescheduleWorkflow) {
+        const refreshed = await this._postRepository.getPostById(
+          root.id,
+          orgId
+        );
+        if (refreshed) {
+          await this.startWorkflow(
+            refreshed.integration!.providerIdentifier
+              .split('-')[0]
+              .toLowerCase(),
+            refreshed.id,
+            orgId,
+            refreshed.state
+          );
+        }
+      }
+    }
+
+    return this.getPost(orgId, root.id);
+  }
+
+  async bulkCreatePosts(orgId: string, items: CreatePostDto[]) {
+    const out: any[] = [];
+    for (const item of items) {
+      const mapped = await this.mapTypeToPost(item, orgId);
+      out.push(await this.createPost(orgId, mapped));
+    }
+    return out;
   }
 
   async separatePosts(content: string, len: number) {
@@ -907,6 +1168,138 @@ export class PostsService {
 
   findPopularPosts(category: string, topic?: string) {
     return this._postRepository.findPopularPosts(category, topic);
+  }
+
+  async getCalendar(
+    orgId: string,
+    from: string,
+    to: string,
+    integrationId?: string
+  ) {
+    const fromD = dayjs.utc(from).toDate();
+    const toD = dayjs.utc(to).toDate();
+    return this._postRepository.findCalendarPosts(
+      orgId,
+      fromD,
+      toD,
+      integrationId
+    );
+  }
+
+  async proposeCalendarRebalance(orgId: string, body: CalendarRebalanceDto) {
+    const fromD = dayjs.utc(body.from).startOf('day');
+    const toD = dayjs.utc(body.to).endOf('day');
+    const posts = await this._postRepository.findCalendarPosts(
+      orgId,
+      fromD.toDate(),
+      toD.toDate(),
+      body.integrationId
+    );
+
+    const maxPerDay = body.maxPerDay ?? 3;
+    const cadence = body.cadence ?? 'daily';
+
+    const dayKey = (d: Date) => dayjs.utc(d).format('YYYY-MM-DD');
+
+    const byDay = new Map<string, typeof posts>();
+    for (const p of posts) {
+      const key = dayKey(p.publishDate);
+      const list = byDay.get(key) || [];
+      list.push(p);
+      byDay.set(key, list);
+    }
+
+    const conflicts: { type: string; message: string; day?: string }[] = [];
+    for (const [day, list] of byDay) {
+      if (list.length > maxPerDay) {
+        conflicts.push({
+          type: 'max_per_day',
+          message: `More than ${maxPerDay} root posts on ${day}`,
+          day,
+        });
+      }
+    }
+
+    const proposedMoves: {
+      postId: string;
+      group: string;
+      from: string;
+      to: string;
+    }[] = [];
+
+    const counts = new Map<string, number>();
+    for (const p of posts) {
+      counts.set(dayKey(p.publishDate), (counts.get(dayKey(p.publishDate)) || 0) + 1);
+    }
+
+    const cadenceOk = (d: dayjs.Dayjs) => {
+      if (cadence === 'mwf') {
+        const dow = d.day();
+        return dow === 1 || dow === 3 || dow === 5;
+      }
+      if (cadence === 'every_other_day') {
+        return d.diff(fromD, 'day') % 2 === 0;
+      }
+      return true;
+    };
+
+    const nextSlot = (start: dayjs.Dayjs): dayjs.Dayjs | null => {
+      let d = start.startOf('day');
+      const limit = 120;
+      for (let i = 0; i < limit; i++) {
+        if (!d.isBefore(fromD, 'day') && !d.isAfter(toD, 'day')) {
+          const key = d.format('YYYY-MM-DD');
+          if ((counts.get(key) || 0) < maxPerDay && cadenceOk(d)) {
+            return d;
+          }
+        }
+        d = d.add(1, 'day');
+      }
+      return null;
+    };
+
+    for (const [day, list] of [...byDay.entries()].sort(([a], [b]) =>
+      a.localeCompare(b)
+    )) {
+      if (list.length <= maxPerDay) {
+        continue;
+      }
+      const excess = [...list].sort(
+        (a, b) =>
+          dayjs.utc(a.publishDate).valueOf() - dayjs.utc(b.publishDate).valueOf()
+      );
+      const toMove = excess.slice(maxPerDay);
+      for (const p of toMove) {
+        const fromIso = dayjs.utc(p.publishDate).toISOString();
+        const after = dayjs.utc(p.publishDate).add(1, 'day').startOf('day');
+        const slot = nextSlot(after);
+        if (!slot) {
+          conflicts.push({
+            type: 'no_slot',
+            message: `No available day through range for post ${p.id}`,
+          });
+          continue;
+        }
+        const keyOld = dayKey(p.publishDate);
+        const keyNew = slot.format('YYYY-MM-DD');
+        counts.set(keyOld, (counts.get(keyOld) || 1) - 1);
+        counts.set(keyNew, (counts.get(keyNew) || 0) + 1);
+        const t = dayjs.utc(p.publishDate);
+        const newDt = slot
+          .hour(t.hour())
+          .minute(t.minute())
+          .second(0)
+          .millisecond(0);
+        proposedMoves.push({
+          postId: p.id,
+          group: p.group,
+          from: fromIso,
+          to: newDt.toISOString(),
+        });
+      }
+    }
+
+    return { proposedMoves, conflicts, cadence, maxPerDay };
   }
 
   async findFreeDateTime(orgId: string, integrationId?: string) {

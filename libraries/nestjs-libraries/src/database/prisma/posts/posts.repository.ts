@@ -1,5 +1,6 @@
 import { PrismaRepository } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Post as PostBody } from '@gitroom/nestjs-libraries/dtos/posts/create.post.dto';
 import { APPROVED_SUBMIT_FOR_ORDER, Post, State } from '@prisma/client';
 import { GetPostsDto } from '@gitroom/nestjs-libraries/dtos/posts/get.posts.dto';
@@ -21,6 +22,7 @@ dayjs.extend(utc);
 export class PostsRepository {
   constructor(
     private _post: PrismaRepository<'post'>,
+    private _postIdempotency: PrismaRepository<'postIdempotency'>,
     private _popularPosts: PrismaRepository<'popularPosts'>,
     private _comments: PrismaRepository<'comments'>,
     private _tags: PrismaRepository<'tags'>,
@@ -120,6 +122,41 @@ export class PostsRepository {
     });
   }
 
+  findCalendarPosts(
+    orgId: string,
+    from: Date,
+    to: Date,
+    integrationId?: string
+  ) {
+    return this._post.model.post.findMany({
+      where: {
+        organizationId: orgId,
+        deletedAt: null,
+        parentPostId: null,
+        intervalInDays: null,
+        publishDate: {
+          gte: from,
+          lte: to,
+        },
+        state: {
+          in: ['DRAFT', 'QUEUE'],
+        },
+        integration: {
+          deletedAt: null,
+          ...(integrationId ? { id: integrationId } : {}),
+        },
+      },
+      orderBy: { publishDate: 'asc' },
+      select: {
+        id: true,
+        group: true,
+        publishDate: true,
+        state: true,
+        integrationId: true,
+      },
+    });
+  }
+
   async getPosts(orgId: string, query: GetPostsDto) {
     // Use the provided start and end dates directly
     const startDate = dayjs.utc(query.startDate).toDate();
@@ -161,6 +198,11 @@ export class PostsRepository {
               integration: {
                 customerId: query.customer,
               },
+            }
+          : {}),
+        ...(query.integrationId
+          ? {
+              integrationId: query.integrationId,
             }
           : {}),
       },
@@ -287,7 +329,124 @@ export class PostsRepository {
     };
   }
 
+  findIdempotencyRow(
+    organizationId: string,
+    idempotencyKey: string,
+    integrationId: string,
+    publishAtBucket: Date
+  ) {
+    return this._postIdempotency.model.postIdempotency.findUnique({
+      where: {
+        organizationId_idempotencyKey_integrationId_publishAtBucket: {
+          organizationId,
+          idempotencyKey,
+          integrationId,
+          publishAtBucket,
+        },
+      },
+    });
+  }
+
+  /** Claim slot with rootPostId=null, or return false on unique conflict (another in-flight request). */
+  async tryClaimIdempotencySlot(data: {
+    organizationId: string;
+    idempotencyKey: string;
+    integrationId: string;
+    publishAtBucket: Date;
+  }): Promise<boolean> {
+    try {
+      await this._postIdempotency.model.postIdempotency.create({
+        data: {
+          ...data,
+          rootPostId: null,
+        },
+      });
+      return true;
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        return false;
+      }
+      throw e;
+    }
+  }
+
+  async setIdempotencyRootPost(
+    organizationId: string,
+    idempotencyKey: string,
+    integrationId: string,
+    publishAtBucket: Date,
+    rootPostId: string
+  ) {
+    return this._postIdempotency.model.postIdempotency.update({
+      where: {
+        organizationId_idempotencyKey_integrationId_publishAtBucket: {
+          organizationId,
+          idempotencyKey,
+          integrationId,
+          publishAtBucket,
+        },
+      },
+      data: { rootPostId },
+    });
+  }
+
+  async deleteIdempotencySlot(
+    organizationId: string,
+    idempotencyKey: string,
+    integrationId: string,
+    publishAtBucket: Date
+  ) {
+    return this._postIdempotency.model.postIdempotency.delete({
+      where: {
+        organizationId_idempotencyKey_integrationId_publishAtBucket: {
+          organizationId,
+          idempotencyKey,
+          integrationId,
+          publishAtBucket,
+        },
+      },
+    });
+  }
+
+  updatePostRow(
+    orgId: string,
+    id: string,
+    data: Prisma.PostUpdateInput
+  ) {
+    return this._post.model.post.update({
+      where: {
+        id,
+        organizationId: orgId,
+        deletedAt: null,
+      },
+      data,
+    });
+  }
+
+  updateGroupSettings(orgId: string, group: string, settings: string) {
+    return this._post.model.post.updateMany({
+      where: {
+        organizationId: orgId,
+        group,
+        deletedAt: null,
+      },
+      data: { settings },
+    });
+  }
+
   async deletePost(orgId: string, group: string) {
+    await this._postIdempotency.model.postIdempotency.deleteMany({
+      where: {
+        rootPost: {
+          organizationId: orgId,
+          group,
+        },
+      },
+    });
+
     await this._post.model.post.updateMany({
       where: {
         organizationId: orgId,

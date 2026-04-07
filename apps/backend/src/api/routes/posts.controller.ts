@@ -5,6 +5,7 @@ import {
   Get,
   HttpException,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -28,6 +29,12 @@ import {
   AuthorizationActions,
   Sections,
 } from '@gitroom/backend/services/auth/permissions/permission.exception.class';
+import { PatchPostDto } from '@gitroom/nestjs-libraries/dtos/posts/patch.post.dto';
+import {
+  BulkCreatePostsDto,
+  BulkPatchPostsDto,
+} from '@gitroom/nestjs-libraries/dtos/posts/bulk.post.dto';
+import { ValidationPipe } from '@nestjs/common';
 
 @ApiTags('Posts')
 @Controller('/posts')
@@ -116,6 +123,46 @@ export class PostsController {
     return this._postsService.getPostsMinified(org.id, query);
   }
 
+  @Patch('/bulk')
+  @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
+  async bulkPatchPosts(
+    @GetOrgFromRequest() org: Organization,
+    @Body() rawBody: unknown
+  ) {
+    const pipe = new ValidationPipe({
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    });
+    const body = await pipe.transform(rawBody, {
+      type: 'body',
+      metatype: BulkPatchPostsDto,
+    });
+    const out = [];
+    for (const item of body.items) {
+      out.push(
+        await this._postsService.patchPostGroup(org.id, item.postId, item.patch)
+      );
+    }
+    return out;
+  }
+
+  @Post('/bulk')
+  @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
+  async bulkCreatePosts(
+    @GetOrgFromRequest() org: Organization,
+    @Body() rawBody: unknown
+  ) {
+    const pipe = new ValidationPipe({
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    });
+    const body = await pipe.transform(rawBody, {
+      type: 'body',
+      metatype: BulkCreatePostsDto,
+    });
+    return this._postsService.bulkCreatePosts(org.id, body.items);
+  }
+
   @Get('/find-slot')
   async findSlot(@GetOrgFromRequest() org: Organization) {
     return { date: await this._postsService.findFreeDateTime(org.id) };
@@ -162,6 +209,33 @@ export class PostsController {
     return this._postsService.getPostsByGroup(org.id, group);
   }
 
+  @Patch('/:postId')
+  @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
+  async patchPost(
+    @GetOrgFromRequest() org: Organization,
+    @Param('postId') postId: string,
+    @Body() rawBody: unknown
+  ) {
+    const pipe = new ValidationPipe({
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    });
+    const body = await pipe.transform(rawBody, {
+      type: 'body',
+      metatype: PatchPostDto,
+    });
+    return this._postsService.patchPostGroup(org.id, postId, body);
+  }
+
+  @Post('/:postId/duplicate')
+  @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
+  duplicatePost(
+    @GetOrgFromRequest() org: Organization,
+    @Param('postId') postId: string
+  ) {
+    return this._postsService.duplicatePostGroup(org.id, postId);
+  }
+
   @Get('/:id')
   getPost(@GetOrgFromRequest() org: Organization, @Param('id') id: string) {
     return this._postsService.getPost(org.id, id);
@@ -202,12 +276,12 @@ export class PostsController {
     res.end();
   }
 
-  @Delete('/:group')
+  @Delete('/:idOrGroup')
   deletePost(
     @GetOrgFromRequest() org: Organization,
-    @Param('group') group: string
+    @Param('idOrGroup') idOrGroup: string
   ) {
-    return this._postsService.deletePost(org.id, group);
+    return this._postsService.deletePostByIdOrGroup(org.id, idOrGroup);
   }
 
   @Put('/:id/date')

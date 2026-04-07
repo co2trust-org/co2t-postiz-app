@@ -35,7 +35,7 @@ export class PostContent {
 
   @IsOptional()
   @IsString()
-  id: string;
+  id?: string;
 
   @IsOptional()
   @IsNumber()
@@ -64,7 +64,7 @@ export class Post {
 
   @IsOptional()
   @IsString()
-  group: string;
+  group?: string;
 
   @ValidateIf((o) => o.type !== 'draft')
   @ValidateNested()
@@ -92,6 +92,11 @@ export class CreatePostDto {
   @IsDefined()
   @IsIn(['draft', 'schedule', 'now', 'update'])
   type: 'draft' | 'schedule' | 'now' | 'update';
+
+  /** When set, duplicate creates with same key + integration + scheduled minute return the existing root post. */
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
 
   @IsOptional()
   @IsString()

@@ -33,6 +33,7 @@ model Organization {
   plugs               Plugs[]
   post                Post[]               @relation("organization")
   submittedPost       Post[]               @relation("submittedForOrg")
+  postIdempotency     PostIdempotency[]
   sets                Sets[]
   signatures          Signatures[]
   subscription        Subscription?
@@ -341,6 +342,7 @@ model Integration {
   orderItems            OrderItems[]
   plugs                 Plugs[]
   posts                 Post[]
+  postIdempotency       PostIdempotency[]
 
   @@unique([organizationId, internalId])
   @@index([rootInternalId])
@@ -426,6 +428,7 @@ model Post {
   submittedForOrder          Orders?                   @relation(fields: [submittedForOrderId], references: [id])
   submittedForOrganization   Organization?             @relation("submittedForOrg", fields: [submittedForOrganizationId], references: [id])
   tags                       TagsPosts[]
+  postIdempotency            PostIdempotency[]
 
   @@index([group])
   @@index([deletedAt])
@@ -441,6 +444,25 @@ model Post {
   @@index([updatedAt])
   @@index([releaseURL])
   @@index([integrationId])
+}
+
+/// Dedupe key for idempotent post creation (same org + integration + slot + key => same root post).
+model PostIdempotency {
+  id              String       @id @default(cuid())
+  organizationId  String
+  idempotencyKey  String
+  integrationId   String
+  publishAtBucket DateTime
+  rootPostId      String?
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  integration     Integration  @relation(fields: [integrationId], references: [id])
+  rootPost        Post?        @relation(fields: [rootPostId], references: [id])
+
+  @@unique([organizationId, idempotencyKey, integrationId, publishAtBucket])
+  @@index([organizationId])
+  @@index([integrationId])
+  @@index([rootPostId])
 }
 
 model Notifications {
