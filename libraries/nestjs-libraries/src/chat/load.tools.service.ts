@@ -89,7 +89,9 @@ export class LoadToolsService {
       )}
 `;
       },
-      model: openai('gpt-5.2'),
+      model: openai(
+        process.env.OPENAI_AGENT_MODEL?.trim() || 'gpt-4.1-nano'
+      ),
       tools,
       memory: new Memory({
         storage: pStore,

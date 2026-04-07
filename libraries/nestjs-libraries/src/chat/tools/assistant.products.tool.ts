@@ -14,34 +14,19 @@ export class AssistantProductsTool implements AgentToolInterface {
     return createTool({
       id: 'products',
       description: `Product catalog tools: discover API shape, list cached products, get one, ingest from CO2 Trust API, search by name.`,
-      inputSchema: z.discriminatedUnion('operation', [
-        z.object({ operation: z.literal('discover') }),
-        z.object({
-          operation: z.literal('list'),
-          cursor: z.string().optional(),
-          limit: z.number().optional(),
-          updatedAfter: z.string().optional(),
-        }),
-        z.object({
-          operation: z.literal('get'),
-          id: z.string().optional(),
-          slug: z.string().optional(),
-          externalId: z.string().optional(),
-        }),
-        z.object({
-          operation: z.literal('ingest'),
-          mode: z.enum(['summary', 'full']),
-          limit: z.number().optional(),
-          updatedAfter: z.string().optional(),
-          dryRun: z.boolean().optional(),
-        }),
-        z.object({
-          operation: z.literal('search'),
-          query: z.string(),
-          limit: z.number().optional(),
-        }),
-      ]),
-      outputSchema: z.any(),
+      // Single object schema — OpenAI Responses API rejects z.discriminatedUnion JSON Schema ("type: None").
+      inputSchema: z.object({
+        operation: z.enum(['discover', 'list', 'get', 'ingest', 'search']),
+        cursor: z.string().optional(),
+        limit: z.number().optional(),
+        updatedAfter: z.string().optional(),
+        id: z.string().optional(),
+        slug: z.string().optional(),
+        externalId: z.string().optional(),
+        mode: z.enum(['summary', 'full']).optional(),
+        dryRun: z.boolean().optional(),
+        query: z.string().optional(),
+      }),
       mcp: {
         annotations: {
           title: 'Products',
@@ -79,19 +64,27 @@ export class AssistantProductsTool implements AgentToolInterface {
               slug: inputData.slug,
               externalId: inputData.externalId,
             });
-          case 'ingest':
+          case 'ingest': {
+            if (!inputData.mode) {
+              throw new Error('ingest requires mode: summary | full');
+            }
             return this._products.ingest(organizationId, {
               mode: inputData.mode,
               limit: inputData.limit,
               updatedAfter: inputData.updatedAfter,
               dryRun: inputData.dryRun,
             });
-          case 'search':
+          }
+          case 'search': {
+            if (!inputData.query?.trim()) {
+              throw new Error('search requires query');
+            }
             return this._products.searchForOrg(
               organizationId,
               inputData.query,
               inputData.limit
             );
+          }
           default:
             return { error: 'unknown_operation' };
         }

@@ -20,109 +20,64 @@ export class AssistantSocialManagerTool implements AgentToolInterface {
     return createTool({
       id: 'socialManager',
       description: `Post CRUD, calendar, rebalance proposal, per-post analytics, workspace analytics summary, brand profile read/update. Approvals are not yet in DB — submit/approve/reject return not_implemented.`,
-      inputSchema: z.discriminatedUnion('operation', [
-        z.object({
-          operation: z.literal('posts.list'),
-          from: z.string(),
-          to: z.string(),
-          integrationId: z.string().optional(),
-          status: z
-            .array(z.enum(['QUEUE', 'DRAFT', 'PUBLISHED', 'ERROR']))
-            .optional(),
-        }),
-        z.object({
-          operation: z.literal('posts.get'),
-          postId: z.string(),
-        }),
-        z.object({
-          operation: z.literal('posts.update'),
-          postId: z.string(),
-          publishDate: z.string().optional(),
-          dateAction: z.enum(['schedule', 'update']).optional(),
-          rescheduleWorkflow: z.boolean().optional(),
-          settings: z.record(z.any()).optional(),
-          segments: z
-            .array(
-              z.object({
-                id: z.string(),
-                content: z.string().optional(),
-                delay: z.number().optional(),
-                image: z.array(z.any()).optional(),
-              })
-            )
-            .optional(),
-        }),
-        z.object({
-          operation: z.literal('posts.move'),
-          postId: z.string(),
-          newDate: z.string(),
-          rescheduleWorkflow: z.boolean().optional(),
-        }),
-        z.object({
-          operation: z.literal('posts.delete'),
-          postId: z.string().optional(),
-          groupId: z.string().optional(),
-        }),
-        z.object({
-          operation: z.literal('posts.duplicate'),
-          postId: z.string(),
-        }),
-        z.object({
-          operation: z.literal('calendar.get'),
-          from: z.string(),
-          to: z.string(),
-          integrationId: z.string().optional(),
-        }),
-        z.object({
-          operation: z.literal('calendar.rebalance'),
-          from: z.string(),
-          to: z.string(),
-          integrationId: z.string().optional(),
-          cadence: z.enum(['daily', 'every_other_day', 'mwf']).optional(),
-          maxPerDay: z.number().optional(),
-        }),
-        z.object({
-          operation: z.literal('analytics.postPerformance'),
-          postId: z.string(),
-          date: z.number().optional().describe('Unix seconds; default now'),
-        }),
-        z.object({
-          operation: z.literal('analytics.summary'),
-          from: z.string(),
-          to: z.string(),
-          integrationId: z.string().optional(),
-        }),
-        z.object({
-          operation: z.literal('brand.get'),
-        }),
-        z.object({
-          operation: z.literal('brand.update'),
-          voice: z.string().optional(),
-          tone: z.string().optional(),
-          banned_phrases: z.array(z.string()).optional(),
-          required_disclaimers: z.array(z.string()).optional(),
-          examples: z.array(z.string()).optional(),
-        }),
-        z.object({
-          operation: z.literal('approvals.submitDraft'),
-          draftId: z.string(),
-          reviewers: z.array(z.string()),
-        }),
-        z.object({
-          operation: z.literal('approvals.getStatus'),
-          draftId: z.string(),
-        }),
-        z.object({
-          operation: z.literal('approvals.approve'),
-          draftId: z.string(),
-        }),
-        z.object({
-          operation: z.literal('approvals.reject'),
-          draftId: z.string(),
-          reason: z.string(),
-        }),
-      ]),
-      outputSchema: z.any(),
+      // Single object schema — OpenAI rejects discriminatedUnion tool parameters.
+      inputSchema: z.object({
+        operation: z.enum([
+          'posts.list',
+          'posts.get',
+          'posts.update',
+          'posts.move',
+          'posts.delete',
+          'posts.duplicate',
+          'calendar.get',
+          'calendar.rebalance',
+          'analytics.postPerformance',
+          'analytics.summary',
+          'brand.get',
+          'brand.update',
+          'approvals.submitDraft',
+          'approvals.getStatus',
+          'approvals.approve',
+          'approvals.reject',
+        ]),
+        from: z.string().optional(),
+        to: z.string().optional(),
+        integrationId: z.string().optional(),
+        status: z
+          .array(z.enum(['QUEUE', 'DRAFT', 'PUBLISHED', 'ERROR']))
+          .optional(),
+        postId: z.string().optional(),
+        groupId: z.string().optional(),
+        publishDate: z.string().optional(),
+        newDate: z.string().optional(),
+        dateAction: z.enum(['schedule', 'update']).optional(),
+        rescheduleWorkflow: z.boolean().optional(),
+        settings: z.record(z.unknown()).optional(),
+        segments: z
+          .array(
+            z.object({
+              id: z.string(),
+              content: z.string().optional(),
+              delay: z.number().optional(),
+              image: z.array(z.unknown()).optional(),
+            })
+          )
+          .optional(),
+        cadence: z.enum(['daily', 'every_other_day', 'mwf']).optional(),
+        maxPerDay: z.number().optional(),
+        date: z
+          .number()
+          .optional()
+          .describe('Unix seconds for analytics.postPerformance; default now'),
+        voice: z.string().optional(),
+        tone: z.string().optional(),
+        banned_phrases: z.array(z.string()).optional(),
+        required_disclaimers: z.array(z.string()).optional(),
+        examples: z.array(z.string()).optional(),
+        draftId: z.string().optional(),
+        reviewers: z.array(z.string()).optional(),
+        reason: z.string().optional(),
+      }),
       mcp: {
         annotations: {
           title: 'Social manager',
@@ -139,16 +94,27 @@ export class AssistantSocialManagerTool implements AgentToolInterface {
         ).id;
 
         switch (inputData.operation) {
-          case 'posts.list':
+          case 'posts.list': {
+            if (!inputData.from || !inputData.to) {
+              throw new Error('posts.list requires from and to (ISO date range)');
+            }
             return this._posts.agentPostsList(organizationId, {
               startDate: inputData.from,
               endDate: inputData.to,
               integrationId: inputData.integrationId,
               state: inputData.status,
             } as any);
-          case 'posts.get':
+          }
+          case 'posts.get': {
+            if (!inputData.postId) {
+              throw new Error('posts.get requires postId');
+            }
             return this._posts.getPost(organizationId, inputData.postId);
+          }
           case 'posts.update': {
+            if (!inputData.postId) {
+              throw new Error('posts.update requires postId');
+            }
             const patch: PatchPostDto = {
               publishDate: inputData.publishDate,
               dateAction: inputData.dateAction,
@@ -162,12 +128,16 @@ export class AssistantSocialManagerTool implements AgentToolInterface {
               patch
             );
           }
-          case 'posts.move':
+          case 'posts.move': {
+            if (!inputData.postId || !inputData.newDate) {
+              throw new Error('posts.move requires postId and newDate');
+            }
             return this._posts.patchPostGroup(organizationId, inputData.postId, {
               publishDate: inputData.newDate,
               dateAction: 'schedule',
               rescheduleWorkflow: inputData.rescheduleWorkflow ?? true,
             });
+          }
           case 'posts.delete':
             if (inputData.postId) {
               return this._posts.deletePostByPostId(
@@ -178,20 +148,31 @@ export class AssistantSocialManagerTool implements AgentToolInterface {
             if (inputData.groupId) {
               return this._posts.deletePost(organizationId, inputData.groupId);
             }
-            throw new Error('postId or groupId required');
-          case 'posts.duplicate':
+            throw new Error('posts.delete requires postId or groupId');
+          case 'posts.duplicate': {
+            if (!inputData.postId) {
+              throw new Error('posts.duplicate requires postId');
+            }
             return this._posts.duplicatePostGroup(
               organizationId,
               inputData.postId
             );
-          case 'calendar.get':
+          }
+          case 'calendar.get': {
+            if (!inputData.from || !inputData.to) {
+              throw new Error('calendar.get requires from and to');
+            }
             return this._posts.getCalendar(
               organizationId,
               inputData.from,
               inputData.to,
               inputData.integrationId
             );
+          }
           case 'calendar.rebalance': {
+            if (!inputData.from || !inputData.to) {
+              throw new Error('calendar.rebalance requires from and to');
+            }
             const body: CalendarRebalanceDto = {
               from: inputData.from,
               to: inputData.to,
@@ -201,19 +182,27 @@ export class AssistantSocialManagerTool implements AgentToolInterface {
             };
             return this._posts.proposeCalendarRebalance(organizationId, body);
           }
-          case 'analytics.postPerformance':
+          case 'analytics.postPerformance': {
+            if (!inputData.postId) {
+              throw new Error('analytics.postPerformance requires postId');
+            }
             return this._posts.checkPostAnalytics(
               organizationId,
               inputData.postId,
               inputData.date ?? Math.floor(Date.now() / 1000)
             );
-          case 'analytics.summary':
+          }
+          case 'analytics.summary': {
+            if (!inputData.from || !inputData.to) {
+              throw new Error('analytics.summary requires from and to');
+            }
             return this._posts.agentAnalyticsSummary(
               organizationId,
               inputData.from,
               inputData.to,
               inputData.integrationId
             );
+          }
           case 'brand.get':
             return this._brand.getBrand(organizationId);
           case 'brand.update':
@@ -227,13 +216,37 @@ export class AssistantSocialManagerTool implements AgentToolInterface {
           case 'approvals.submitDraft':
           case 'approvals.getStatus':
           case 'approvals.approve':
-          case 'approvals.reject':
+          case 'approvals.reject': {
+            if (
+              inputData.operation === 'approvals.reject' &&
+              (!inputData.draftId || !inputData.reason)
+            ) {
+              throw new Error('approvals.reject requires draftId and reason');
+            }
+            if (
+              ['approvals.getStatus', 'approvals.approve'].includes(
+                inputData.operation
+              ) &&
+              !inputData.draftId
+            ) {
+              throw new Error(`${inputData.operation} requires draftId`);
+            }
+            if (
+              inputData.operation === 'approvals.submitDraft' &&
+              (!inputData.draftId ||
+                !inputData.reviewers?.length)
+            ) {
+              throw new Error(
+                'approvals.submitDraft requires draftId and reviewers'
+              );
+            }
             return {
               notImplemented: true,
               message:
                 'Approval workflow tables and states are not deployed yet; use draft/QUEUE posts and human review in UI.',
               operation: inputData.operation,
             };
+          }
           default:
             return { error: 'unknown_operation' };
         }

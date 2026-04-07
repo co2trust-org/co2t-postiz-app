@@ -21,12 +21,7 @@ export class AgentHttpRequestTool implements AgentToolInterface {
         query: z
           .record(z.union([z.string(), z.number(), z.boolean()]))
           .optional(),
-        body: z.any().optional(),
-      }),
-      outputSchema: z.object({
-        status: z.number(),
-        headers: z.record(z.string()),
-        data: z.any(),
+        body: z.unknown().optional(),
       }),
       mcp: {
         annotations: {
