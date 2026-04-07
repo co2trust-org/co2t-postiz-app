@@ -13,10 +13,24 @@ export class AssistantProductsTool implements AgentToolInterface {
   run() {
     return createTool({
       id: 'products',
-      description: `Product catalog tools: discover API shape, list cached products, get one, ingest from CO2 Trust API, search by name.`,
+      description: `Product catalog: discover defaults, sources (registered base URLs), list/get/search cached rows by sourceKey, ingest from a chosen baseUrl into a sourceKey partition. Use a distinct sourceKey per environment (e.g. co2t_api_prod vs co2t_api_testnet) and pass sourceKey on list/search/get.`,
       // Single object schema — OpenAI Responses API rejects z.discriminatedUnion JSON Schema ("type: None").
       inputSchema: z.object({
-        operation: z.enum(['discover', 'list', 'get', 'ingest', 'search']),
+        operation: z.enum([
+          'discover',
+          'sources',
+          'list',
+          'get',
+          'ingest',
+          'search',
+        ]),
+        /** Cache partition; default co2t_api_testnet. Set per server (e.g. co2t_api_prod). */
+        sourceKey: z.string().optional(),
+        /** Ingest only: API origin (https://...). Overrides CO2T_PRODUCTS_API_BASE for this run. */
+        baseUrl: z
+          .string()
+          .optional()
+          .describe('HTTPS API origin, no trailing slash required'),
         cursor: z.string().optional(),
         limit: z.number().optional(),
         updatedAfter: z.string().optional(),
@@ -45,6 +59,8 @@ export class AssistantProductsTool implements AgentToolInterface {
         switch (inputData.operation) {
           case 'discover':
             return this._products.discover();
+          case 'sources':
+            return this._products.listRegisteredSources(organizationId);
           case 'list': {
             const updatedAfter = inputData.updatedAfter
               ? new Date(inputData.updatedAfter)
@@ -56,6 +72,7 @@ export class AssistantProductsTool implements AgentToolInterface {
                 updatedAfter && !Number.isNaN(updatedAfter.getTime())
                   ? updatedAfter
                   : undefined,
+              sourceKey: inputData.sourceKey,
             });
           }
           case 'get':
@@ -63,6 +80,7 @@ export class AssistantProductsTool implements AgentToolInterface {
               id: inputData.id,
               slug: inputData.slug,
               externalId: inputData.externalId,
+              sourceKey: inputData.sourceKey,
             });
           case 'ingest': {
             if (!inputData.mode) {
@@ -73,6 +91,8 @@ export class AssistantProductsTool implements AgentToolInterface {
               limit: inputData.limit,
               updatedAfter: inputData.updatedAfter,
               dryRun: inputData.dryRun,
+              baseUrl: inputData.baseUrl,
+              sourceKey: inputData.sourceKey,
             });
           }
           case 'search': {
@@ -82,7 +102,8 @@ export class AssistantProductsTool implements AgentToolInterface {
             return this._products.searchForOrg(
               organizationId,
               inputData.query,
-              inputData.limit
+              inputData.limit,
+              inputData.sourceKey
             );
           }
           default:

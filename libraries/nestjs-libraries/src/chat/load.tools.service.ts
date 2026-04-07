@@ -60,7 +60,7 @@ export class LoadToolsService {
         - Show global analytics about socials
         - List integrations (channels)
         - Use tool httpRequest: allowlisted HTTP to internal APIs (e.g. CO2 Trust product API on Railway); auth token injected server-side when configured
-        - Use tool products with operation discover | list | get | ingest | search for cached product catalog
+        - Use tool products: discover | sources | list | get | ingest | search. For multiple servers pass sourceKey + baseUrl on ingest, then list/search with the same sourceKey
         - Use tool socialManager with operation posts.* | calendar.* | analytics.* | brand.* for CRUD calendar and brand profile (approvals.* not implemented yet)
       
       - We schedule posts to different integration like facebook, instagram, etc. but to the user we don't say integrations we say channels as integration is the technical name

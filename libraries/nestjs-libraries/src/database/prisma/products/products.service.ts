@@ -1,7 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ProductsRepository } from '@gitroom/nestjs-libraries/database/prisma/products/products.repository';
 
-const DEFAULT_SOURCE_KEY = 'co2t_api_testnet';
+/** Default catalog source when the agent omits sourceKey (matches env CO2T_PRODUCTS_API_BASE). */
+export const DEFAULT_PRODUCT_SOURCE_KEY = 'co2t_api_testnet';
+
+function normalizeBaseUrl(url: string) {
+  return url.replace(/\/$/, '');
+}
+
+function defaultBaseUrlFromEnv() {
+  return normalizeBaseUrl(
+    process.env.CO2T_PRODUCTS_API_BASE ||
+      'https://main-api-development.up.railway.app'
+  );
+}
 
 function safeJsonStringify(v: unknown, fallback: string) {
   try {
@@ -158,16 +170,14 @@ export class ProductsService {
   constructor(private _repo: ProductsRepository) {}
 
   discover() {
-    const base =
-      process.env.CO2T_PRODUCTS_API_BASE ||
-      'https://main-api-development.up.railway.app';
-    return {
-      sourceKey: DEFAULT_SOURCE_KEY,
+    const base = defaultBaseUrlFromEnv();
+    const out: Record<string, unknown> = {
+      defaultSourceKey: DEFAULT_PRODUCT_SOURCE_KEY,
       listPath: '/co2trust-services/v1/products',
       detailPathTemplate: '/co2trust-services/v1/products/{id}',
       postizRestBase: process.env.NEXT_PUBLIC_BACKEND_URL || '(set NEXT_PUBLIC_BACKEND_URL)',
       authMode: process.env.CO2T_PRODUCTS_API_TOKEN
-        ? 'bearer_injected_via_httpRequest_tool'
+        ? 'bearer_on_ingest_and_httpRequest_to_railway_host'
         : 'none_configured_set_CO2T_PRODUCTS_API_TOKEN',
       sampleNormalizedFields: [
         'externalId',
@@ -177,17 +187,40 @@ export class ProductsService {
         'tags',
         'category',
       ],
-      configuredBaseUrl: base,
+      envDefaultBaseUrl: base,
+      hint:
+        'Pass sourceKey + baseUrl on ingest to target a non-default server; use sources operation to list registered sources. list/search/get use sourceKey to pick which cache partition to read.',
+    };
+    return out;
+  }
+
+  async listRegisteredSources(orgId: string) {
+    const rows = await this._repo.listSources(orgId);
+    return {
+      envDefaultBaseUrl: defaultBaseUrlFromEnv(),
+      defaultSourceKey: DEFAULT_PRODUCT_SOURCE_KEY,
+      sources: rows,
     };
   }
 
   async listForOrg(
     orgId: string,
-    opts: { cursor?: string; limit?: number; updatedAfter?: Date }
+    opts: {
+      cursor?: string;
+      limit?: number;
+      updatedAfter?: Date;
+      sourceKey?: string;
+    }
   ) {
-    const source = await this._repo.getSource(orgId, DEFAULT_SOURCE_KEY);
+    const key = opts.sourceKey?.trim() || DEFAULT_PRODUCT_SOURCE_KEY;
+    const source = await this._repo.getSource(orgId, key);
     if (!source) {
-      return { items: [], nextCursor: null as string | null };
+      return {
+        items: [],
+        nextCursor: null as string | null,
+        sourceKey: key,
+        hint: `No cache for sourceKey "${key}". Run ingest with sourceKey and baseUrl for that server first.`,
+      };
     }
     const limit = Math.min(opts.limit ?? 20, 100);
     const rows = await this._repo.listProducts(
@@ -200,14 +233,20 @@ export class ProductsService {
     const hasMore = rows.length > limit;
     const items = hasMore ? rows.slice(0, limit) : rows;
     const nextCursor = hasMore ? items[items.length - 1]?.id ?? null : null;
-    return { items, nextCursor };
+    return { items, nextCursor, sourceKey: key, sourceId: source.id };
   }
 
   async getForOrg(
     orgId: string,
-    opts: { id?: string; slug?: string; externalId?: string }
+    opts: {
+      id?: string;
+      slug?: string;
+      externalId?: string;
+      sourceKey?: string;
+    }
   ) {
-    const source = await this._repo.getSource(orgId, DEFAULT_SOURCE_KEY);
+    const key = opts.sourceKey?.trim() || DEFAULT_PRODUCT_SOURCE_KEY;
+    const source = await this._repo.getSource(orgId, key);
     if (!source) return null;
     if (opts.slug) {
       return this._repo.findBySlug(orgId, opts.slug);
@@ -221,11 +260,22 @@ export class ProductsService {
     return null;
   }
 
-  async searchForOrg(orgId: string, query: string, limit?: number) {
+  async searchForOrg(
+    orgId: string,
+    query: string,
+    limit?: number,
+    sourceKey?: string
+  ) {
+    const key = sourceKey?.trim() || DEFAULT_PRODUCT_SOURCE_KEY;
+    const source = await this._repo.getSource(orgId, key);
+    if (!source) {
+      return [];
+    }
     return this._repo.searchByName(
       orgId,
       query,
-      Math.min(limit ?? 10, 50)
+      Math.min(limit ?? 10, 50),
+      source.id
     );
   }
 
@@ -236,12 +286,16 @@ export class ProductsService {
       limit?: number;
       updatedAfter?: string;
       dryRun?: boolean;
+      /** Override API origin for this ingest only (e.g. prod vs testnet). */
+      baseUrl?: string;
+      /** Cache partition key; default co2t_api_testnet. Use a new key per environment. */
+      sourceKey?: string;
     }
   ) {
-    const baseUrl = (
-      process.env.CO2T_PRODUCTS_API_BASE ||
-      'https://main-api-development.up.railway.app'
-    ).replace(/\/$/, '');
+    const sourceKey = opts.sourceKey?.trim() || DEFAULT_PRODUCT_SOURCE_KEY;
+    const baseUrl = normalizeBaseUrl(
+      opts.baseUrl?.trim() || defaultBaseUrlFromEnv()
+    );
     const token = process.env.CO2T_PRODUCTS_API_TOKEN || '';
     const pageSize = Math.min(opts.mode === 'summary' ? 20 : 50, 100);
     const maxItems =
@@ -253,14 +307,12 @@ export class ProductsService {
         wouldFetchFrom: `${baseUrl}/co2trust-services/v1/products`,
         maxItems,
         mode: opts.mode,
+        sourceKey,
+        baseUrlUsed: baseUrl,
       };
     }
 
-    const source = await this._repo.upsertSource(
-      orgId,
-      DEFAULT_SOURCE_KEY,
-      baseUrl
-    );
+    const source = await this._repo.upsertSource(orgId, sourceKey, baseUrl);
 
     const headers: Record<string, string> = {
       Accept: 'application/json',
@@ -329,6 +381,8 @@ export class ProductsService {
       upsertedCount: upserted.length,
       upsertedIds: upserted,
       sourceId: source.id,
+      sourceKey,
+      baseUrlUsed: baseUrl,
     };
   }
 

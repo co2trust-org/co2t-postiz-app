@@ -40,6 +40,19 @@ export class ProductsRepository {
     });
   }
 
+  listSources(orgId: string) {
+    return this._source.model.productSource.findMany({
+      where: { organizationId: orgId },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        sourceKey: true,
+        baseUrl: true,
+        lastIngestedAt: true,
+      },
+    });
+  }
+
   async upsertProduct(
     orgId: string,
     sourceId: string,
@@ -130,10 +143,11 @@ export class ProductsRepository {
     });
   }
 
-  searchByName(orgId: string, q: string, limit: number) {
+  searchByName(orgId: string, q: string, limit: number, sourceId?: string) {
     return this._cache.model.productCache.findMany({
       where: {
         organizationId: orgId,
+        ...(sourceId ? { sourceId } : {}),
         name: { contains: q, mode: 'insensitive' },
       },
       take: limit,
