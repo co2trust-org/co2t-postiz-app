@@ -1,4 +1,7 @@
-import { PrismaRepository } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
+import {
+  PrismaRepository,
+  PrismaService,
+} from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Post as PostBody } from '@gitroom/nestjs-libraries/dtos/posts/create.post.dto';
@@ -22,7 +25,7 @@ dayjs.extend(utc);
 export class PostsRepository {
   constructor(
     private _post: PrismaRepository<'post'>,
-    private _postIdempotency: PrismaRepository<'postIdempotency'>,
+    private _prisma: PrismaService,
     private _popularPosts: PrismaRepository<'popularPosts'>,
     private _comments: PrismaRepository<'comments'>,
     private _tags: PrismaRepository<'tags'>,
@@ -335,7 +338,7 @@ export class PostsRepository {
     integrationId: string,
     publishAtBucket: Date
   ) {
-    return this._postIdempotency.model.postIdempotency.findUnique({
+    return this._prisma.postIdempotency.findUnique({
       where: {
         organizationId_idempotencyKey_integrationId_publishAtBucket: {
           organizationId,
@@ -355,7 +358,7 @@ export class PostsRepository {
     publishAtBucket: Date;
   }): Promise<boolean> {
     try {
-      await this._postIdempotency.model.postIdempotency.create({
+      await this._prisma.postIdempotency.create({
         data: {
           ...data,
           rootPostId: null,
@@ -380,7 +383,7 @@ export class PostsRepository {
     publishAtBucket: Date,
     rootPostId: string
   ) {
-    return this._postIdempotency.model.postIdempotency.update({
+    return this._prisma.postIdempotency.update({
       where: {
         organizationId_idempotencyKey_integrationId_publishAtBucket: {
           organizationId,
@@ -399,7 +402,7 @@ export class PostsRepository {
     integrationId: string,
     publishAtBucket: Date
   ) {
-    return this._postIdempotency.model.postIdempotency.delete({
+    return this._prisma.postIdempotency.delete({
       where: {
         organizationId_idempotencyKey_integrationId_publishAtBucket: {
           organizationId,
@@ -438,7 +441,7 @@ export class PostsRepository {
   }
 
   async deletePost(orgId: string, group: string) {
-    await this._postIdempotency.model.postIdempotency.deleteMany({
+    await this._prisma.postIdempotency.deleteMany({
       where: {
         rootPost: {
           organizationId: orgId,
