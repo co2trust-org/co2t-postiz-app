@@ -6,6 +6,9 @@ import { VideoFunctionTool } from '@gitroom/nestjs-libraries/chat/tools/video.fu
 import { GenerateVideoTool } from '@gitroom/nestjs-libraries/chat/tools/generate.video.tool';
 import { GenerateImageTool } from '@gitroom/nestjs-libraries/chat/tools/generate.image.tool';
 import { IntegrationListTool } from '@gitroom/nestjs-libraries/chat/tools/integration.list.tool';
+import { AgentHttpRequestTool } from '@gitroom/nestjs-libraries/chat/tools/agent.http.request.tool';
+import { AssistantProductsTool } from '@gitroom/nestjs-libraries/chat/tools/assistant.products.tool';
+import { AssistantSocialManagerTool } from '@gitroom/nestjs-libraries/chat/tools/assistant.social.manager.tool';
 
 export const toolList = [
   IntegrationListTool,
@@ -16,4 +19,7 @@ export const toolList = [
   VideoFunctionTool,
   GenerateVideoTool,
   GenerateImageTool,
+  AgentHttpRequestTool,
+  AssistantProductsTool,
+  AssistantSocialManagerTool,
 ];

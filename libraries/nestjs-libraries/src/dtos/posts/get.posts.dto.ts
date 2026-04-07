@@ -1,4 +1,6 @@
 import {
+  IsArray,
+  IsIn,
   IsOptional,
   IsString,
   IsDateString,
@@ -18,4 +20,9 @@ export class GetPostsDto {
   @IsOptional()
   @IsString()
   integrationId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsIn(['QUEUE', 'DRAFT', 'PUBLISHED', 'ERROR'], { each: true })
+  state?: ('QUEUE' | 'DRAFT' | 'PUBLISHED' | 'ERROR')[];
 }

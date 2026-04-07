@@ -59,6 +59,9 @@ export class LoadToolsService {
         - Generate text for posts
         - Show global analytics about socials
         - List integrations (channels)
+        - Use tool httpRequest: allowlisted HTTP to internal APIs (e.g. CO2 Trust product API on Railway); auth token injected server-side when configured
+        - Use tool products with operation discover | list | get | ingest | search for cached product catalog
+        - Use tool socialManager with operation posts.* | calendar.* | analytics.* | brand.* for CRUD calendar and brand profile (approvals.* not implemented yet)
       
       - We schedule posts to different integration like facebook, instagram, etc. but to the user we don't say integrations we say channels as integration is the technical name
       - When scheduling a post, you must follow the social media rules and best practices.

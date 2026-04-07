@@ -125,6 +125,26 @@ export class PostsRepository {
     });
   }
 
+  countPostsByState(
+    orgId: string,
+    from: Date,
+    to: Date,
+    integrationId?: string
+  ) {
+    return this._post.model.post.groupBy({
+      by: ['state'],
+      where: {
+        organizationId: orgId,
+        deletedAt: null,
+        parentPostId: null,
+        publishDate: { gte: from, lte: to },
+        ...(integrationId ? { integrationId } : {}),
+        integration: { deletedAt: null },
+      },
+      _count: { _all: true },
+    });
+  }
+
   findCalendarPosts(
     orgId: string,
     from: Date,
@@ -206,6 +226,11 @@ export class PostsRepository {
         ...(query.integrationId
           ? {
               integrationId: query.integrationId,
+            }
+          : {}),
+        ...(query.state?.length
+          ? {
+              state: { in: query.state },
             }
           : {}),
       },

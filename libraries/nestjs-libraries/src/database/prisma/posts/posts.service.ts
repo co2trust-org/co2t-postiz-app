@@ -318,6 +318,35 @@ export class PostsService {
     });
   }
 
+  async agentPostsList(orgId: string, query: GetPostsDto) {
+    return this.getPostsMinified(orgId, query);
+  }
+
+  async agentAnalyticsSummary(
+    orgId: string,
+    fromIso: string,
+    toIso: string,
+    integrationId?: string
+  ) {
+    const from = dayjs.utc(fromIso).toDate();
+    const to = dayjs.utc(toIso).toDate();
+    const grouped = await this._postRepository.countPostsByState(
+      orgId,
+      from,
+      to,
+      integrationId
+    );
+    return {
+      from: fromIso,
+      to: toIso,
+      integrationId: integrationId ?? null,
+      byState: grouped.map((g) => ({
+        state: g.state,
+        count: g._count._all,
+      })),
+    };
+  }
+
   async getPostsList(orgId: string, query: GetPostsListDto) {
     return minifyPostsList(
       await this._postRepository.getPostsList(orgId, query)

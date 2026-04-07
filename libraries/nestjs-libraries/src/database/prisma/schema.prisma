@@ -44,6 +44,11 @@ model Organization {
   webhooks            Webhooks[]
   oauthApp            OAuthApp[]
   oauthAuthorizations OAuthAuthorization[]
+  productSources      ProductSource[]
+  productCaches       ProductCache[]
+  productBriefs       ProductBrief[]
+  brandAssistantProfile BrandAssistantProfile?
+  assistantHttpAuditLogs AssistantHttpAuditLog[]
 
   @@index([apiKey])
   @@index([streakSince])
@@ -463,6 +468,102 @@ model PostIdempotency {
   @@index([organizationId])
   @@index([integrationId])
   @@index([rootPostId])
+}
+
+/// External product catalog source (e.g. CO2 Trust testnet API).
+model ProductSource {
+  id              String          @id @default(cuid())
+  organizationId  String
+  sourceKey       String
+  baseUrl         String
+  lastIngestedAt  DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  products        ProductCache[]
+
+  @@unique([organizationId, sourceKey])
+  @@index([organizationId])
+}
+
+/// Normalized product row cached from an external API.
+model ProductCache {
+  id                   String        @id @default(cuid())
+  organizationId       String
+  sourceId             String
+  externalId           String
+  slug                 String?
+  name                 String
+  descriptionShort     String?
+  descriptionLong      String?
+  images               String        @default("[]")
+  price                String?
+  currency             String?
+  claims               String        @default("[]")
+  evidence             String        @default("[]")
+  tags                 String        @default("[]")
+  category             String?
+  rawJson              String?
+  updatedAtExternal    DateTime?
+  updatedAtLocal       DateTime      @updatedAt
+  createdAt            DateTime      @default(now())
+  organization         Organization  @relation(fields: [organizationId], references: [id])
+  source               ProductSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  brief                ProductBrief?
+
+  @@unique([sourceId, externalId])
+  @@index([organizationId])
+  @@index([sourceId])
+  @@index([slug])
+}
+
+/// Messaging brief for post generation (safe wording, guardrails).
+model ProductBrief {
+  id               String       @id @default(cuid())
+  organizationId   String
+  productCacheId   String       @unique
+  positioning      String?
+  keyBenefits      String       @default("[]")
+  idealCustomer    String?
+  proofPoints      String       @default("[]")
+  disclaimers      String       @default("[]")
+  doNotSay         String       @default("[]")
+  lastGeneratedAt  DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  product          ProductCache @relation(fields: [productCacheId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+/// Lightweight brand / compliance rules for the assistant (JSON blobs).
+model BrandAssistantProfile {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  voice          String?
+  toneNotes      String?
+  bannedPhrases  String       @default("[]")
+  disclaimers    String       @default("[]")
+  examples       String       @default("[]")
+  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model AssistantHttpAuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  method         String
+  url            String
+  status         Int?
+  durationMs     Int?
+  error          String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([createdAt])
 }
 
 model Notifications {
