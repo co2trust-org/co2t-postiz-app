@@ -27,7 +27,10 @@ import {
 import { useVariables } from '@gitroom/react/helpers/variable.context';
 import { useParams } from 'next/navigation';
 import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
-import { TextMessage } from '@copilotkit/runtime-client-gql';
+import {
+  MessageRole,
+  TextMessage,
+} from '@copilotkit/runtime-client-gql';
 import { AddEditModal } from '@gitroom/frontend/components/new-launch/add.edit.modal';
 import dayjs from 'dayjs';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
@@ -40,6 +43,7 @@ const POLL_NOTES_KEY = 'agent.poll.history.notes';
 const POLL_IMAGES_KEY = 'agent.poll.history.images';
 const AGENT_MODEL_KEY = 'agent.ai.model';
 const MAX_CACHED_IMAGES = 6;
+const ANALYTICS_POLL_RETRY = 2;
 const AGENT_MODEL_OPTIONS = [
   {
     value: 'gpt-4.1',
@@ -219,25 +223,37 @@ const PollAccountHistoryPanel: FC<{
     if (!selectedIntegrationId) return;
     setIsPolling(true);
     setPollError('');
-    try {
-      const response = await fetch(
-        `/analytics/${selectedIntegrationId}?date=${dateRange}`
-      );
-      const data = await response.json();
-      setPollResult(Array.isArray(data) ? data : []);
-      setLastPolledAt(dayjs().format('MMM D, YYYY h:mm A'));
-    } catch {
-      setPollError(
-        t(
-          'unable_to_poll_account_history',
-          'Unable to poll account history for this channel right now.'
-        )
-      );
-      setPollResult([]);
-    } finally {
-      setIsPolling(false);
+    let lastErr: Error | null = null;
+    for (let attempt = 0; attempt <= ANALYTICS_POLL_RETRY; attempt++) {
+      try {
+        const response = await fetch(
+          `/analytics/${selectedIntegrationId}?date=${dateRange}`
+        );
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        setPollResult(Array.isArray(data) ? data : []);
+        setLastPolledAt(dayjs().format('MMM D, YYYY h:mm A'));
+        setIsPolling(false);
+        return;
+      } catch (e) {
+        lastErr = e instanceof Error ? e : new Error(String(e));
+        if (attempt < ANALYTICS_POLL_RETRY) {
+          await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        }
+      }
     }
-  }, [selectedIntegrationId, dateRange]);
+    console.warn('[agent] poll account history failed', lastErr);
+    setPollError(
+      t(
+        'unable_to_poll_account_history',
+        'Unable to poll account history for this channel right now.'
+      ) + (lastErr?.message ? ` (${lastErr.message})` : '')
+    );
+    setPollResult([]);
+    setIsPolling(false);
+  }, [selectedIntegrationId, dateRange, t]);
 
   const saveNotes = useCallback((value: string) => {
     setNoteText(value);
@@ -496,21 +512,62 @@ const PollAccountHistoryPanel: FC<{
   );
 };
 
+function mapRoleToCopilot(
+  role: string
+): (typeof MessageRole)[keyof typeof MessageRole] {
+  if (role === 'user') return MessageRole.User;
+  if (role === 'system') return MessageRole.System;
+  return MessageRole.Assistant;
+}
+
 const LoadMessages: FC<{ id: string }> = ({ id }) => {
   const { setMessages } = useCopilotMessagesContext();
   const fetch = useFetch();
 
-  const loadMessages = useCallback(async (idToSet: string) => {
-    const data = await (await fetch(`/copilot/${idToSet}/list`)).json();
-    setMessages(
-      data.uiMessages.map((p: any) => {
-        return new TextMessage({
-          content: p.content,
-          role: p.role,
-        });
-      })
-    );
-  }, []);
+  const loadMessages = useCallback(
+    async (idToSet: string) => {
+      try {
+        const res = await fetch(`/copilot/${idToSet}/list`);
+        if (!res.ok) {
+          console.warn(
+            '[agent] load thread messages failed',
+            idToSet,
+            res.status
+          );
+          setMessages([]);
+          return;
+        }
+        const data = await res.json();
+        const rows =
+          data.uiMessages ||
+          (Array.isArray(data.messages)
+            ? data.messages.map((m: Record<string, unknown>) => ({
+                role: m.role,
+                content:
+                  typeof m.content === 'string'
+                    ? m.content
+                    : JSON.stringify(m.content ?? ''),
+              }))
+            : []);
+        if (!Array.isArray(rows)) {
+          setMessages([]);
+          return;
+        }
+        setMessages(
+          rows.map((p: { role: string; content: string }) => {
+            return new TextMessage({
+              content: String(p.content ?? ''),
+              role: mapRoleToCopilot(p.role),
+            });
+          })
+        );
+      } catch (e) {
+        console.warn('[agent] load thread messages error', idToSet, e);
+        setMessages([]);
+      }
+    },
+    [fetch, setMessages]
+  );
 
   useEffect(() => {
     if (id === 'new') {
@@ -518,7 +575,7 @@ const LoadMessages: FC<{ id: string }> = ({ id }) => {
       return;
     }
     loadMessages(id);
-  }, [id]);
+  }, [id, loadMessages, setMessages]);
 
   return null;
 };

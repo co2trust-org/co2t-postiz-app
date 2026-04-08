@@ -30,6 +30,34 @@ export type ChannelsContext = {
   ui: string;
 };
 
+/** Mastra recall() returns `messages` (MastraDBMessage[]), not uiMessages. Normalize for the agent UI. */
+function textFromMastraDbMessage(msg: Record<string, unknown>): string {
+  const content = msg?.content as Record<string, unknown> | string | undefined;
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (content && typeof content === 'object') {
+    if (content.format === 2 && Array.isArray(content.parts)) {
+      return (content.parts as Record<string, unknown>[])
+        .map((p) => {
+          if (p?.type === 'text' && typeof p.text === 'string') {
+            return p.text as string;
+          }
+          if (typeof p.text === 'string') {
+            return p.text as string;
+          }
+          return '';
+        })
+        .filter(Boolean)
+        .join('\n');
+    }
+    if (typeof content.content === 'string') {
+      return content.content;
+    }
+  }
+  return '';
+}
+
 const ALLOWED_OPENAI_MODELS = ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano'];
 const DEFAULT_OPENAI_MODEL = 'gpt-4.1';
 
@@ -140,12 +168,28 @@ export class CopilotController {
     const mastra = await this._mastraService.mastra();
     const memory = await mastra.getAgent('postiz').getMemory();
     try {
-      return await memory.recall({
+      const recalled = await memory.recall({
         resourceId: organization.id,
         threadId,
+        perPage: false,
       });
+      const raw = recalled.messages || [];
+      const uiMessages = (raw as Record<string, unknown>[]).map((m) => ({
+        role: m.role === 'assistant' || m.role === 'user' || m.role === 'system'
+          ? m.role
+          : 'assistant',
+        content: textFromMastraDbMessage(m),
+      }));
+      return {
+        uiMessages,
+        messages: raw,
+        total: recalled.total,
+      };
     } catch (err) {
-      return { messages: [] };
+      Logger.warn(
+        `copilot thread messages failed threadId=${threadId}: ${(err as Error)?.message}`
+      );
+      return { uiMessages: [], messages: [], error: 'load_failed' };
     }
   }
 

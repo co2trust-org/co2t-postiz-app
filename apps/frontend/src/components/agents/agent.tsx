@@ -209,17 +209,29 @@ export const Agent: FC<{ children: ReactNode }> = ({ children }) => {
   );
 };
 
+const THREADS_SWR_KEY = 'agent-copilot-threads';
+const THREAD_LIST_POLL_MS = 60_000;
+
 const Threads: FC = () => {
   const fetch = useFetch();
   const router = useRouter();
   const pathname = usePathname();
   const t = useT();
   const threads = useCallback(async () => {
-    return (await fetch('/copilot/list')).json();
-  }, []);
+    const res = await fetch('/copilot/list');
+    if (!res.ok) {
+      throw new Error(`threads ${res.status}`);
+    }
+    return res.json();
+  }, [fetch]);
   const { id } = useParams<{ id: string }>();
 
-  const { data } = useSWR('threads', threads);
+  const { data, error, isLoading, mutate } = useSWR(THREADS_SWR_KEY, threads, {
+    refreshInterval: THREAD_LIST_POLL_MS,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+    dedupingInterval: 5_000,
+  });
 
   return (
     <div
@@ -255,6 +267,26 @@ const Threads: FC = () => {
             </div>
           </Link>
         </div>
+        {error && (
+          <div className="mb-[10px] text-[12px] text-red-400 px-[10px]">
+            {t(
+              'chat_history_load_error',
+              'Could not refresh chat list. Check connection or try again.'
+            )}
+            <button
+              type="button"
+              className="ms-[8px] underline"
+              onClick={() => mutate()}
+            >
+              {t('retry', 'Retry')}
+            </button>
+          </div>
+        )}
+        {isLoading && !data?.threads?.length && (
+          <div className="text-[12px] opacity-60 px-[10px] mb-[8px]">
+            {t('loading_chats', 'Loading chats…')}
+          </div>
+        )}
         <div className="flex flex-col gap-[1px]">
           {data?.threads?.map((p: any) => (
             <Link
