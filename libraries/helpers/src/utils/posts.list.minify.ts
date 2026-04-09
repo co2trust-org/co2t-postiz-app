@@ -25,6 +25,7 @@ const POST_ITEM_KEYS: Record<string, string> = {
   integration: 'n',
   intervalInDays: 'iv',
   actualDate: 'ad',
+  image: 'im',
 };
 
 const INTEGRATION_KEYS: Record<string, string> = {

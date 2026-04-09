@@ -57,6 +57,11 @@ import copy from 'copy-to-clipboard';
 import { stripHtmlValidation } from '@gitroom/helpers/utils/strip.html.validation';
 import { newDayjs } from '@gitroom/frontend/components/layout/set.timezone';
 import { Button } from '@gitroom/react/form/button';
+import ImageWithFallback from '@gitroom/react/helpers/image.with.fallback';
+import {
+  getFirstPostMediaUrl,
+  resolveCalendarMediaUrl,
+} from '@gitroom/frontend/components/launches/helpers/calendar.post.media';
 
 // Extend dayjs with necessary plugins
 extend(isSameOrAfter);
@@ -272,7 +277,10 @@ export const DayView = () => {
   const options = useMemo(() => {
     const createdPosts = posts.map((post) => ({
       integration: [integrations.find((i) => i.id === post.integration.id)!],
-      image: post?.integration?.picture || '',
+      image:
+        post?.integration?.picture ||
+        integrations.find((i) => i.id === post.integration?.id)?.picture ||
+        '',
       identifier: post?.integration?.providerIdentifier || '',
       id: post?.integration?.id || '',
       name: post?.integration?.name || '',
@@ -318,7 +326,7 @@ export const DayView = () => {
             </div>
             <div
               key={option[0].time}
-              className="min-h-[60px] rounded-[10px] flex justify-center items-center gap-[10px] mb-[20px]"
+              className="min-h-[100px] rounded-[10px] flex justify-center items-center gap-[10px] mb-[20px]"
             >
               <CalendarContext.Provider
                 value={{
@@ -541,6 +549,7 @@ export const ListView = () => {
                 <CalendarItem
                   key={post.id}
                   display="day"
+                  compact={false}
                   isBeforeNow={false}
                   date={newDayjs(post.publishDate)}
                   state={post.state}
@@ -833,12 +842,13 @@ export const CalendarColumn: FC<{
       {display === 'month' && (
         <div className={clsx('pt-[6px] text-[14px]')}>{getDate.date()}</div>
       )}
-      <div
-        className={clsx(
-          'relative flex flex-col flex-1 text-white rounded-[8px] min-h-[70px]',
-          canDrop && 'border border-[#612BD3]'
-        )}
-      >
+        <div
+          className={clsx(
+            'relative flex flex-col flex-1 text-white rounded-[8px]',
+            display === 'day' ? 'min-h-[100px]' : 'min-h-[70px]',
+            canDrop && 'border border-[#612BD3]'
+          )}
+        >
         <div
           className={clsx(
             'flex-col text-[12px] pointer w-full flex scrollbar scrollbar-thumb-tableBorder scrollbar-track-secondary',
@@ -861,6 +871,7 @@ export const CalendarColumn: FC<{
               <div className="relative w-full flex flex-col items-center p-[2.5px]">
                 <CalendarItem
                   display={display as 'day' | 'week' | 'month'}
+                  compact={display === 'week' || display === 'month'}
                   isBeforeNow={isBeforeNow}
                   date={getDate}
                   state={post.state}
@@ -981,12 +992,15 @@ const CalendarItem: FC<{
   integrations: Integrations[];
   state: State;
   display: 'day' | 'week' | 'month';
+  /** Week/month use smaller cells; day + list use larger preview. */
+  compact?: boolean;
   showTime?: boolean;
   post: Post & {
     integration: Integration;
     tags: {
       tag: Tags;
     }[];
+    image?: string | null;
   };
 }> = memo((props) => {
   const t = useT();
@@ -1003,8 +1017,25 @@ const CalendarItem: FC<{
     deletePost,
     showTime,
     missingRelease,
+    compact = true,
+    integrations,
   } = props;
-  const { disableXAnalytics } = useVariables();
+  const { disableXAnalytics, frontEndUrl, uploadDirectory } = useVariables();
+
+  const channelPicture = useMemo(() => {
+    const fromPost = post.integration?.picture;
+    if (fromPost && String(fromPost).trim()) {
+      return String(fromPost).trim();
+    }
+    const live = integrations.find((i) => i.id === post.integration?.id);
+    return (live?.picture && String(live.picture).trim()) || '/no-picture.jpg';
+  }, [post.integration, integrations]);
+
+  const attachmentThumbUrl = useMemo(() => {
+    const raw = getFirstPostMediaUrl(post.image ?? null);
+    if (!raw) return null;
+    return resolveCalendarMediaUrl(raw, frontEndUrl, uploadDirectory);
+  }, [post.image, frontEndUrl, uploadDirectory]);
   const preview = useCallback(() => {
     window.open(`/p/` + post.id + '?share=true', '_blank');
   }, [post]);
@@ -1127,34 +1158,81 @@ const CalendarItem: FC<{
       <div
         onClick={editPost}
         className={clsx(
-          'gap-[5px] w-full flex h-full flex-1 rounded-br-[10px] rounded-bl-[10px] p-[8px] text-[14px] bg-newColColor',
+          'gap-[8px] w-full flex h-full flex-1 rounded-br-[10px] rounded-bl-[10px] p-[8px] text-[14px] bg-newColColor',
           'relative',
-          isBeforeNow && '!grayscale'
+          isBeforeNow && '!grayscale',
+          !compact && 'items-stretch'
         )}
       >
-        <div className={clsx('relative min-w-[20px]')}>
-          <img
-            className="w-[20px] h-[20px] rounded-[8px]"
-            src={post.integration.picture! || '/no-picture.jpg'}
+        <div
+          className={clsx(
+            'relative shrink-0',
+            compact ? 'min-w-[28px]' : 'min-w-[40px]'
+          )}
+        >
+          <ImageWithFallback
+            className={clsx(
+              'rounded-[8px] object-cover ring-1 ring-newTableBorder',
+              compact ? 'w-[28px] h-[28px]' : 'w-[40px] h-[40px]'
+            )}
+            src={channelPicture}
+            fallbackSrc="/no-picture.jpg"
+            width={compact ? 28 : 40}
+            height={compact ? 28 : 40}
           />
           <img
-            className="w-[12px] h-[12px] rounded-[8px] absolute z-10 top-[10px] end-0 border border-fifth"
+            className={clsx(
+              'rounded-[6px] absolute z-10 border border-fifth bg-newBgColorInner',
+              compact
+                ? 'w-[14px] h-[14px] top-[18px] end-[-2px]'
+                : 'w-[18px] h-[18px] top-[26px] end-[-3px]'
+            )}
             src={`/icons/platforms/${post.integration?.providerIdentifier}.png`}
+            alt=""
           />
         </div>
-        <div className="w-full flex-1 flex flex-col min-h-[40px]">
+        {attachmentThumbUrl && (
+          <div className="shrink-0">
+            <ImageWithFallback
+              className={clsx(
+                'rounded-[8px] object-cover border border-newTableBorder bg-newTableHeader',
+                compact ? 'w-[36px] h-[36px]' : 'w-[88px] h-[88px]'
+              )}
+              src={attachmentThumbUrl}
+              fallbackSrc="/no-picture.jpg"
+              width={compact ? 36 : 88}
+              height={compact ? 36 : 88}
+            />
+          </div>
+        )}
+        <div
+          className={clsx(
+            'w-full flex-1 flex flex-col min-w-0',
+            compact ? 'min-h-[40px]' : 'min-h-[72px] justify-center'
+          )}
+        >
+          <div className="text-start text-[12px] opacity-80 truncate">
+            {post.integration?.name}
+          </div>
           <div className="text-start">
             {state === 'DRAFT' ? t('draft', 'Draft') + ': ' : ''}
           </div>
-            <div className="w-full relative">
-              <div className="absolute top-0 start-0 w-full text-ellipsis break-words line-clamp-1 text-start">
-                {stripHtmlValidation('none', post.content, false, true, false) ||
-                  t('no_content', 'no content')}
-              </div>
+          <div className="w-full relative flex-1 min-h-0">
+            <div
+              className={clsx(
+                'w-full text-start break-words',
+                compact
+                  ? 'line-clamp-2 text-[13px]'
+                  : 'line-clamp-4 text-[14px] leading-snug'
+              )}
+            >
+              {stripHtmlValidation('none', post.content, false, true, false) ||
+                t('no_content', 'no content')}
             </div>
+          </div>
         </div>
         {showTime && (
-          <div className="text-textColor/50 text-[12px] whitespace-nowrap flex items-center">
+          <div className="text-textColor/50 text-[12px] whitespace-nowrap flex items-start pt-[2px] shrink-0">
             {newDayjs(post.publishDate).local().format(isUSCitizen() ? 'hh:mm A' : 'HH:mm')}
           </div>
         )}

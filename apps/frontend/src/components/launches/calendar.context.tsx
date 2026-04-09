@@ -281,11 +281,39 @@ export const CalendarWeekProvider: FC<{
     []
   );
 
-  const posts = useMemo(() => calendarData?.posts || [], [calendarData?.posts]);
+  const mergeIntegrationPictures = useCallback(
+    (rawPosts: any[]) => {
+      const list = rawPosts || [];
+      if (!list.length || !integrations?.length) {
+        return list;
+      }
+      const byId = new Map(integrations.map((i) => [i.id, i]));
+      return list.map((p) => {
+        const int = p?.integration;
+        const live = int?.id ? byId.get(int.id) : undefined;
+        if (!live?.picture) return p;
+        const existing = int?.picture && String(int.picture).trim();
+        if (existing) return p;
+        return {
+          ...p,
+          integration: { ...int, picture: live.picture },
+        };
+      });
+    },
+    [integrations]
+  );
+
+  const posts = useMemo(
+    () => mergeIntegrationPictures(calendarData?.posts || []),
+    [calendarData?.posts, mergeIntegrationPictures]
+  );
   const comments = useMemo(() => calendarData?.comments || [], [calendarData?.comments]);
 
   // List view data
-  const listPosts = useMemo(() => listData?.posts || [], [listData?.posts]);
+  const listPosts = useMemo(
+    () => mergeIntegrationPictures(listData?.posts || []),
+    [listData?.posts, mergeIntegrationPictures]
+  );
   const listTotal = listData?.total || 0;
   const listTotalPages = Math.ceil(listTotal / 100);
 
