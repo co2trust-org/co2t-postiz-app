@@ -23,8 +23,10 @@ import { RealIP } from 'nestjs-real-ip';
 import { UserAgent } from '@gitroom/nestjs-libraries/user/user.agent';
 import { Provider } from '@prisma/client';
 import * as Sentry from '@sentry/nestjs';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @ApiTags('Auth')
+@SkipThrottle()
 @Controller('/auth')
 export class AuthController {
   constructor(

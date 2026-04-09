@@ -18,8 +18,12 @@ export class ThrottlerBehindProxyGuard extends ThrottlerGuard {
   protected override async getTracker(
     req: Record<string, any>
   ): Promise<string> {
+    const orgId = req.org?.id;
+    if (!orgId) {
+      return req.ip || req.socket?.remoteAddress || 'anonymous';
+    }
     return (
-      req.org.id + '_' + (req.url.indexOf('/posts') > -1 ? 'posts' : 'other')
+      orgId + '_' + (req.url.indexOf('/posts') > -1 ? 'posts' : 'other')
     );
   }
 }
