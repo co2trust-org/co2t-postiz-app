@@ -1020,7 +1020,7 @@ const CalendarItem: FC<{
     compact = true,
     integrations,
   } = props;
-  const { disableXAnalytics, frontEndUrl, uploadDirectory } = useVariables();
+  const { disableXAnalytics } = useVariables();
 
   const channelPicture = useMemo(() => {
     const fromPost = post.integration?.picture;
@@ -1034,8 +1034,8 @@ const CalendarItem: FC<{
   const attachmentThumbUrl = useMemo(() => {
     const raw = getFirstPostMediaUrl(post.image ?? null);
     if (!raw) return null;
-    return resolveCalendarMediaUrl(raw, frontEndUrl, uploadDirectory);
-  }, [post.image, frontEndUrl, uploadDirectory]);
+    return resolveCalendarMediaUrl(raw);
+  }, [post.image]);
   const preview = useCallback(() => {
     window.open(`/p/` + post.id + '?share=true', '_blank');
   }, [post]);

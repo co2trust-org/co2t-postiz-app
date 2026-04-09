@@ -15,21 +15,34 @@ export function getFirstPostMediaUrl(
   }
 }
 
-/** Absolute URL for calendar thumbnails (local uploads need site origin + static prefix). */
-export function resolveCalendarMediaUrl(
-  raw: string,
-  frontEndUrl: string,
-  uploadDirectory: string
-): string {
+/**
+ * Turn stored media paths into URLs that load in the current browser tab.
+ * - Same-origin `/uploads/...` must stay relative (or be rewritten to `window.location.origin`)
+ *   so we never pin images to a mismatched FRONTEND_URL (e.g. test vs prod).
+ * - External CDN URLs (Meta, R2, etc.) are left unchanged.
+ */
+export function resolveCalendarMediaUrl(raw: string): string {
   if (!raw) return '';
+
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    if (typeof window === 'undefined') {
+      return raw;
+    }
+    try {
+      const u = new URL(raw);
+      if (u.pathname.startsWith('/uploads/')) {
+        return `${window.location.origin}${u.pathname}${u.search}`;
+      }
+    } catch {
+      /* ignore */
+    }
     return raw;
   }
-  const base = (frontEndUrl || '').replace(/\/$/, '');
+
   const path = raw.startsWith('/') ? raw : `/${raw}`;
   if (path.startsWith('/uploads/')) {
-    return `${base}${path}`;
+    return path;
   }
-  const dir = (uploadDirectory || 'uploads').replace(/^\//, '').replace(/\/$/, '');
-  return `${base}/${dir}${path}`;
+  // Stored relative path like "2026/04/04/file.jpg" → served under /uploads/
+  return `/uploads${path}`;
 }
