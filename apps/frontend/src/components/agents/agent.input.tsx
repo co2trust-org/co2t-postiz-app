@@ -1,8 +1,10 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { useCopilotContext, useCopilotReadable } from '@copilotkit/react-core';
+import { useCopilotContext } from '@copilotkit/react-core';
 import AutoResizingTextarea from '@gitroom/frontend/components/agents/agent.textarea';
 import { useChatContext } from '@copilotkit/react-ui';
 import { InputProps } from '@copilotkit/react-ui/dist/components/chat/props';
+import { useAgentPostPreviewPreference } from '@gitroom/frontend/components/agents/agent.post.preview.preference';
+import { useT } from '@gitroom/react/translation/get.transation.service.client';
 const MAX_NEWLINES = 6;
 
 export const Input = ({
@@ -16,6 +18,9 @@ export const Input = ({
 }: InputProps & { onChange: (value: string) => void }) => {
   const context = useChatContext();
   const copilotContext = useCopilotContext();
+  const t = useT();
+  const { postPreviewEnabled, setPostPreviewEnabled } =
+    useAgentPostPreviewPreference();
   const showPoweredBy = !copilotContext.copilotApiConfig?.publicApiKey;
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -98,6 +103,31 @@ export const Input = ({
               {context.icons.uploadIcon}
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setPostPreviewEnabled(!postPreviewEnabled)}
+            aria-pressed={postPreviewEnabled}
+            title={
+              postPreviewEnabled
+                ? t(
+                    'agent_post_preview_on',
+                    'Post previews in chat are on — click to hide'
+                  )
+                : t(
+                    'agent_post_preview_off',
+                    'Post previews in chat are off — click to show'
+                  )
+            }
+            className={`copilotKitInputControlButton text-[11px] font-[600] px-[8px] min-w-[72px] rounded-[6px] border ${
+              postPreviewEnabled
+                ? 'border-btnPrimary bg-btnPrimary/15 text-btnPrimary'
+                : 'border-newTableBorder bg-newTableHeader text-textColor opacity-80'
+            }`}
+          >
+            {postPreviewEnabled
+              ? t('post_previews_on', 'Previews')
+              : t('post_previews_off', 'Previews')}
+          </button>
 
           <div style={{ flexGrow: 1 }} />
           <button

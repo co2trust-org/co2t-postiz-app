@@ -21,7 +21,9 @@ import {
 import {
   AgentPostPreviewCards,
   extractAgentPostPreviews,
+  stripAgentPostPreviewBlocks,
 } from '@gitroom/frontend/components/agents/agent.post.preview';
+import { AgentPostPreviewPreferenceProvider } from '@gitroom/frontend/components/agents/agent.post.preview.preference';
 import { Input } from '@gitroom/frontend/components/agents/agent.input';
 import { useModals } from '@gitroom/frontend/components/layout/new-modal';
 import {
@@ -47,6 +49,7 @@ import { ExistingDataContextProvider } from '@gitroom/frontend/components/launch
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
 import useSWR from 'swr';
 import { useAddProviderAndConnect } from '@gitroom/frontend/components/launches/add.provider.component';
+import { useAgentPostPreviewPreference } from '@gitroom/frontend/components/agents/agent.post.preview.preference';
 
 const POLL_NOTES_KEY = 'agent.poll.history.notes';
 const POLL_IMAGES_KEY = 'agent.poll.history.images';
@@ -127,12 +130,13 @@ export const AgentChat: FC = () => {
         <div className="absolute left-0 w-full h-full pb-[20px] px-[20px] pt-[20px] flex flex-col gap-[12px]">
           <PollAccountHistoryPanel aiModel={aiModel} onModelChange={setAiModel} />
           <div className="w-full flex-1 min-h-0">
-            <CopilotChat
-              className="w-full h-full"
-              AssistantMessage={AssistantMessageComponent}
-              labels={{
-                title: t('your_assistant', 'Your Assistant'),
-                initial: t('agent_welcome_message', `Hello, I am your Postiz agent 🙌🏻.
+            <AgentPostPreviewPreferenceProvider>
+              <CopilotChat
+                className="w-full h-full"
+                AssistantMessage={AssistantMessageComponent}
+                labels={{
+                  title: t('your_assistant', 'Your Assistant'),
+                  initial: t('agent_welcome_message', `Hello, I am your Postiz agent 🙌🏻.
               
 I can schedule a post or multiple posts to multiple channels and generate pictures and videos.
 
@@ -142,10 +146,11 @@ You can see your previous conversations from the right menu.
 
 You can also use me as an MCP Server, check Settings >> Public API
 `),
-              }}
-              UserMessage={UserMessageComponent}
-              Input={NewInput}
-            />
+                }}
+                UserMessage={UserMessageComponent}
+                Input={NewInput}
+              />
+            </AgentPostPreviewPreferenceProvider>
           </div>
         </div>
       </div>
@@ -605,10 +610,14 @@ function userMessageContentToHtml(raw: string) {
 }
 
 const UserMessageComponent: FC<UserMessageProps> = (props) => {
+  const { postPreviewEnabled } = useAgentPostPreviewPreference();
   const raw = props.message?.content || '';
+  const effectiveRaw = postPreviewEnabled
+    ? raw
+    : stripAgentPostPreviewBlocks(raw);
   const { previews, rest } = useMemo(
-    () => extractAgentPostPreviews(raw),
-    [raw]
+    () => extractAgentPostPreviews(effectiveRaw),
+    [effectiveRaw]
   );
   const html = useMemo(() => userMessageContentToHtml(rest), [rest]);
   return (
@@ -620,11 +629,15 @@ const UserMessageComponent: FC<UserMessageProps> = (props) => {
 };
 
 const AssistantMessageComponent: FC<AssistantMessageProps> = (props) => {
+  const { postPreviewEnabled } = useAgentPostPreviewPreference();
   const raw =
     typeof props.message?.content === 'string' ? props.message.content : '';
+  const effectiveRaw = postPreviewEnabled
+    ? raw
+    : stripAgentPostPreviewBlocks(raw);
   const { previews, rest } = useMemo(
-    () => extractAgentPostPreviews(raw),
-    [raw]
+    () => extractAgentPostPreviews(effectiveRaw),
+    [effectiveRaw]
   );
   const genUi = props.message?.generativeUI?.();
 

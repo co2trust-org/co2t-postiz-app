@@ -1,7 +1,6 @@
 'use client';
 
 import React, { FC, useMemo } from 'react';
-import clsx from 'clsx';
 import ImageWithFallback from '@gitroom/react/helpers/image.with.fallback';
 import { stripHtmlValidation } from '@gitroom/helpers/utils/strip.html.validation';
 import { resolveCalendarMediaUrl } from '@gitroom/frontend/components/launches/helpers/calendar.post.media';
@@ -59,6 +58,18 @@ export function extractAgentPostPreviews(raw: string): {
     return '';
   });
   return { previews, rest: rest.trim() };
+}
+
+/** Remove preview blocks without parsing JSON (for "hide previews" mode). */
+export function stripAgentPostPreviewBlocks(raw: string): string {
+  if (!raw?.includes(POST_PREVIEW_START)) {
+    return raw;
+  }
+  const regex = new RegExp(
+    `${escapeRegex(POST_PREVIEW_START)}[\\s\\S]*?${escapeRegex(POST_PREVIEW_END)}`,
+    'g'
+  );
+  return raw.replace(regex, '').trim();
 }
 
 function escapeRegex(s: string) {
