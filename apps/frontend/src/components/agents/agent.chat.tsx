@@ -8,11 +8,20 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import { CopilotChat, CopilotKitCSSProperties } from '@copilotkit/react-ui';
 import {
+  CopilotChat,
+  CopilotKitCSSProperties,
+  Markdown,
+} from '@copilotkit/react-ui';
+import {
+  AssistantMessageProps,
   InputProps,
   UserMessageProps,
 } from '@copilotkit/react-ui/dist/components/chat/props';
+import {
+  AgentPostPreviewCards,
+  extractAgentPostPreviews,
+} from '@gitroom/frontend/components/agents/agent.post.preview';
 import { Input } from '@gitroom/frontend/components/agents/agent.input';
 import { useModals } from '@gitroom/frontend/components/layout/new-modal';
 import {
@@ -120,6 +129,7 @@ export const AgentChat: FC = () => {
           <div className="w-full flex-1 min-h-0">
             <CopilotChat
               className="w-full h-full"
+              AssistantMessage={AssistantMessageComponent}
               labels={{
                 title: t('your_assistant', 'Your Assistant'),
                 initial: t('agent_welcome_message', `Hello, I am your Postiz agent 🙌🏻.
@@ -133,7 +143,7 @@ You can see your previous conversations from the right menu.
 You can also use me as an MCP Server, check Settings >> Public API
 `),
               }}
-              UserMessage={Message}
+              UserMessage={UserMessageComponent}
               Input={NewInput}
             />
           </div>
@@ -580,30 +590,53 @@ const LoadMessages: FC<{ id: string }> = ({ id }) => {
   return null;
 };
 
-const Message: FC<UserMessageProps> = (props) => {
-  const convertContentToImagesAndVideo = useMemo(() => {
-    return (props.message?.content || '')
-      .replace(/Video: (http.*mp4\n)/g, (match, p1) => {
-        return `<video controls class="h-[150px] w-[150px] rounded-[8px] mb-[10px]"><source src="${p1.trim()}" type="video/mp4">Your browser does not support the video tag.</video>`;
-      })
-      .replace(/Image: (http.*\n)/g, (match, p1) => {
-        return `<img src="${p1.trim()}" class="h-[150px] w-[150px] max-w-full border border-newBgColorInner" />`;
-      })
-      .replace(/\[\-\-Media\-\-\](.*)\[\-\-Media\-\-\]/g, (match, p1) => {
-        return `<div class="flex justify-center mt-[20px]">${p1}</div>`;
-      })
-      .replace(
-        /(\[--integrations--\][\s\S]*?\[--integrations--\])/g,
-        (match, p1) => {
-          return ``;
-        }
-      );
-  }, [props.message?.content]);
+function userMessageContentToHtml(raw: string) {
+  return raw
+    .replace(/Video: (http.*mp4\n)/g, (match, p1) => {
+      return `<video controls class="h-[150px] w-[150px] rounded-[8px] mb-[10px]"><source src="${p1.trim()}" type="video/mp4">Your browser does not support the video tag.</video>`;
+    })
+    .replace(/Image: (http.*\n)/g, (match, p1) => {
+      return `<img src="${p1.trim()}" class="h-[150px] w-[150px] max-w-full border border-newBgColorInner" />`;
+    })
+    .replace(/\[\-\-Media\-\-\](.*)\[\-\-Media\-\-\]/g, (match, p1) => {
+      return `<div class="flex justify-center mt-[20px]">${p1}</div>`;
+    })
+    .replace(/(\[--integrations--\][\s\S]*?\[--integrations--\])/g, () => ``);
+}
+
+const UserMessageComponent: FC<UserMessageProps> = (props) => {
+  const raw = props.message?.content || '';
+  const { previews, rest } = useMemo(
+    () => extractAgentPostPreviews(raw),
+    [raw]
+  );
+  const html = useMemo(() => userMessageContentToHtml(rest), [rest]);
   return (
-    <div
-      className="copilotKitMessage copilotKitUserMessage min-w-[300px]"
-      dangerouslySetInnerHTML={{ __html: convertContentToImagesAndVideo }}
-    />
+    <div className="copilotKitMessage copilotKitUserMessage min-w-[300px] flex flex-col gap-[8px]">
+      {previews.length > 0 ? <AgentPostPreviewCards previews={previews} /> : null}
+      <div dangerouslySetInnerHTML={{ __html: html }} />
+    </div>
+  );
+};
+
+const AssistantMessageComponent: FC<AssistantMessageProps> = (props) => {
+  const raw =
+    typeof props.message?.content === 'string' ? props.message.content : '';
+  const { previews, rest } = useMemo(
+    () => extractAgentPostPreviews(raw),
+    [raw]
+  );
+  const genUi = props.message?.generativeUI?.();
+
+  return (
+    <div className="copilotKitMessage copilotKitAssistantMessage !max-w-full min-w-0 flex flex-col gap-[8px]">
+      {previews.length > 0 ? <AgentPostPreviewCards previews={previews} /> : null}
+      {rest ? <Markdown content={rest} /> : null}
+      {genUi}
+      {(props.isLoading || props.isGenerating) && (
+        <div className="animate-pulse bg-btnPrimary/40 w-full max-w-[280px] h-[4px] rounded-full" />
+      )}
+    </div>
   );
 };
 const NewInput: FC<InputProps> = (props) => {

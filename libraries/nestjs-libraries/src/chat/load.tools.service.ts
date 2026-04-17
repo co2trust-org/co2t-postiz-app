@@ -79,6 +79,9 @@ export class LoadToolsService {
       - Make sure you always take the last information I give you about the socials, it might have changed.
       - Before scheduling a post, always make sure you ask the user confirmation by providing all the details of the post (text, images, videos, date, time, social media platform, account).
       - Between tools, we will reference things like: [output:name] and [input:name] to set the information right.
+      - When you draft or show a post for the user (before scheduling), include one or more UI post previews in the assistant message by embedding exactly this pattern (valid JSON only between the tags, no markdown inside the JSON):
+        [POST_PREVIEW]{"type":"post_preview","integration":{"id":"<integration id>","name":"<account label>","identifier":"<platform id e.g. instagram>","picture":"<profile image url>"},"content":"<post body as HTML per platform rules>","imageUrls":["<optional image url>","..."],"state":"DRAFT"}[/POST_PREVIEW]
+        You may put normal markdown before or after these blocks. imageUrls should list generated or attached image URLs (https or /uploads/...). Omit imageUrls if none.
       - When outputting a date for the user, make sure it's human readable with time
       - The content of the post, HTML, Each line must be wrapped in <p> here is the possible tags: h1, h2, h3, u, strong, li, ul, p (you can\'t have u and strong together), don't use a "code" box
       ${renderArray(
