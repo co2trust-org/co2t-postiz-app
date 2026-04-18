@@ -7,7 +7,8 @@ permissions:
 
 on:
   pull_request_target:
-    types: [opened, reopened]
+    # Only on first open. Including `reopened` re-ran anti-slop and closed PRs again in a loop.
+    types: [opened]
 
 jobs:
   anti-slop:
@@ -47,6 +48,7 @@ jobs:
 
           # Actions
           exempt-label: "exempt"
-          close-pr: true
-          failure-add-pr-labels: "spam"
-          failure-pr-message: "This PR has been marked as Spam, please re-open if this is a mistake."
+          # Do not auto-close: agent/Cursor PRs often fail strict template or conventional-title rules.
+          close-pr: false
+          failure-add-pr-labels: "pr-quality-failed"
+          failure-pr-message: "Automated PR quality checks reported issues (see the **PR Quality** workflow run). This PR stays open for review. Maintainers may add the `exempt` label for known-good exceptions."
