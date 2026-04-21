@@ -46,16 +46,19 @@ export class NoAuthIntegrationsController {
     @Param('integration') integration: string,
     @Body() body: ConnectIntegrationDto
   ) {
+    const stateIntegration = await ioRedis.get(`integration:${body.state}`);
+    const resolvedIntegration = stateIntegration || integration;
+
     if (
       !this._integrationManager
         .getAllowedSocialsIntegrations()
-        .includes(integration)
+        .includes(resolvedIntegration)
     ) {
       throw new Error('Integration not allowed');
     }
 
     const integrationProvider =
-      this._integrationManager.getSocialIntegration(integration);
+      this._integrationManager.getSocialIntegration(resolvedIntegration);
 
     const getCodeVerifier = integrationProvider.customFields
       ? 'none'
@@ -73,6 +76,9 @@ export class NoAuthIntegrationsController {
 
     if (!integrationProvider.customFields) {
       await ioRedis.del(`login:${body.state}`);
+    }
+    if (stateIntegration) {
+      await ioRedis.del(`integration:${body.state}`);
     }
 
     const details = integrationProvider.externalUrl
@@ -218,7 +224,7 @@ export class NoAuthIntegrationsController {
         picture,
         'social',
         String(id),
-        integration,
+        resolvedIntegration,
         accessToken,
         refreshToken,
         expiresIn,
@@ -293,7 +299,7 @@ export class NoAuthIntegrationsController {
           integrationId: createUpdate.id,
           organizationId: org.id,
           internalId: String(id),
-          provider: integration,
+          provider: resolvedIntegration,
         })
       : undefined;
 

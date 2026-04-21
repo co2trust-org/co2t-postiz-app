@@ -86,6 +86,7 @@ export class EnterpriseController {
       await ioRedis.set(`redirect:${state}`, load.redirectUrl, 'EX', 3600);
       await ioRedis.set(`organization:${state}`, org.id, 'EX', 3600);
       await ioRedis.set(`login:${state}`, codeVerifier, 'EX', 3600);
+      await ioRedis.set(`integration:${state}`, load.provider, 'EX', 3600);
 
       return url;
     } catch (err) {}

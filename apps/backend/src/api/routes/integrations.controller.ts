@@ -263,6 +263,7 @@ export class IntegrationsController {
 
       await ioRedis.set(`organization:${state}`, org.id, 'EX', 3600);
       await ioRedis.set(`login:${state}`, codeVerifier, 'EX', 3600);
+      await ioRedis.set(`integration:${state}`, integration, 'EX', 3600);
       await ioRedis.set(
         `external:${state}`,
         JSON.stringify(getExternalUrl),

@@ -688,6 +688,10 @@ export class LinkedinPageProvider
     if (explicitRedirect) {
       return explicitRedirect;
     }
+    const sharedRedirect = process.env.LINKEDIN_REDIRECT_URI?.trim();
+    if (sharedRedirect) {
+      return sharedRedirect;
+    }
 
     const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/+$/, '');
     return `${frontendUrl}/integrations/social/linkedin-page`;
