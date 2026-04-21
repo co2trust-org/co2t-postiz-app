@@ -44,6 +44,7 @@ const POLL_IMAGES_KEY = 'agent.poll.history.images';
 const AGENT_MODEL_KEY = 'agent.ai.model';
 const MAX_CACHED_IMAGES = 6;
 const ANALYTICS_POLL_RETRY = 2;
+const POLL_SUPPORTED_IDENTIFIERS = ['instagram', 'instagram-standalone', 'facebook'];
 const AGENT_MODEL_OPTIONS = [
   {
     value: 'gpt-4.1',
@@ -161,8 +162,13 @@ const PollAccountHistoryPanel: FC<{
   const [cachedImages, setCachedImages] = useState<CachedImage[]>([]);
 
   const loadIntegrations = useCallback(async () => {
-    return (await (await fetch('/integrations/list')).json()).integrations || [];
-  }, []);
+    const response = await fetch('/integrations/list');
+    if (!response.ok) {
+      return [];
+    }
+    const data = await response.json();
+    return data?.integrations || [];
+  }, [fetch]);
 
   const { data: integrations } = useSWR<SocialIntegration[]>(
     'agent-poll-history-integrations',
@@ -180,7 +186,7 @@ const PollAccountHistoryPanel: FC<{
 
   const socialIntegrations = useMemo(() => {
     return (integrations || []).filter((item) =>
-      ['instagram', 'facebook'].includes(item.identifier)
+      POLL_SUPPORTED_IDENTIFIERS.includes(item.identifier)
     );
   }, [integrations]);
 
@@ -253,7 +259,7 @@ const PollAccountHistoryPanel: FC<{
     );
     setPollResult([]);
     setIsPolling(false);
-  }, [selectedIntegrationId, dateRange, t]);
+  }, [selectedIntegrationId, dateRange, t, fetch]);
 
   const saveNotes = useCallback((value: string) => {
     setNoteText(value);
