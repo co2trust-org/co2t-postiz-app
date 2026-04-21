@@ -1,6 +1,6 @@
 'use client';
 
-import React, { ReactNode, useCallback } from 'react';
+import React, { ReactNode, useCallback, useEffect, useState } from 'react';
 import { Logo } from '@gitroom/frontend/components/new-layout/logo';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 const ModeComponent = dynamic(
@@ -50,11 +50,18 @@ const jakartaSans = Plus_Jakarta_Sans({
 
 export const LayoutComponent = ({ children }: { children: ReactNode }) => {
   const fetch = useFetch();
-  const releaseLabel =
+  const buildTimeReleaseLabel =
     process.env.NEXT_PUBLIC_GIT_RELEASE ||
     process.env.NEXT_PUBLIC_VERSION ||
     'local';
-  const branchLabel = process.env.NEXT_PUBLIC_GIT_BRANCH || 'local';
+  const buildTimeBranchLabel = process.env.NEXT_PUBLIC_GIT_BRANCH || 'local';
+  const [runtimeBuildMeta, setRuntimeBuildMeta] = useState<{
+    branch: string;
+    release: string;
+  }>({
+    branch: buildTimeBranchLabel,
+    release: buildTimeReleaseLabel,
+  });
 
   const { backendUrl, billingEnabled, isGeneral } = useVariables();
 
@@ -62,7 +69,7 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
   const searchParams = useSearchParams();
   const load = useCallback(async (path: string) => {
     return await (await fetch(path)).json();
-  }, []);
+  }, [fetch, buildTimeBranchLabel, buildTimeReleaseLabel]);
   const { data: user, mutate } = useSWR('/user/self', load, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
@@ -70,6 +77,34 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
     refreshWhenOffline: false,
     refreshWhenHidden: false,
   });
+
+  useEffect(() => {
+    let mounted = true;
+    fetch('/api/build-meta')
+      .then(async (response) => {
+        if (!response.ok) {
+          return;
+        }
+        const data = (await response.json()) as {
+          branch?: string;
+          release?: string;
+        };
+        if (!mounted) {
+          return;
+        }
+        setRuntimeBuildMeta({
+          branch: data.branch || buildTimeBranchLabel,
+          release: data.release || buildTimeReleaseLabel,
+        });
+      })
+      .catch(() => {
+        // Keep build-time fallback values.
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   if (!user) return null;
 
@@ -117,8 +152,8 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                           <div className="relative">
                             <Logo />
                             <div className="absolute start-[66px] top-[8px] whitespace-nowrap rounded-[8px] bg-newBgColorInner border border-tableBorder px-[8px] py-[6px] text-[10px] leading-[1.2] text-textColor">
-                              <div>Branch: {branchLabel}</div>
-                              <div>Release: {releaseLabel}</div>
+                              <div>Branch: {runtimeBuildMeta.branch}</div>
+                              <div>Release: {runtimeBuildMeta.release}</div>
                             </div>
                           </div>
                           <TopMenu />

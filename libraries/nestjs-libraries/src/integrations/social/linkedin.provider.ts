@@ -117,11 +117,10 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
   async generateAuthUrl() {
     const state = makeId(6);
     const codeVerifier = makeId(30);
+    const redirectUri = this.getRedirectUri();
     const url = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${
       process.env.LINKEDIN_CLIENT_ID
-    }&prompt=none&redirect_uri=${encodeURIComponent(
-      `${process.env.FRONTEND_URL}/integrations/social/linkedin`
-    )}&state=${state}&scope=${encodeURIComponent(this.scopes.join(' '))}`;
+    }&prompt=none&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=${encodeURIComponent(this.scopes.join(' '))}`;
     return {
       url,
       codeVerifier,
@@ -137,12 +136,7 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
     const body = new URLSearchParams();
     body.append('grant_type', 'authorization_code');
     body.append('code', params.code);
-    body.append(
-      'redirect_uri',
-      `${process.env.FRONTEND_URL}/integrations/social/linkedin${
-        params.refresh ? `?refresh=${params.refresh}` : ''
-      }`
-    );
+    body.append('redirect_uri', this.getRedirectUri());
     body.append('client_id', process.env.LINKEDIN_CLIENT_ID!);
     body.append('client_secret', process.env.LINKEDIN_CLIENT_SECRET!);
 
@@ -812,5 +806,15 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
 
   mentionFormat(idOrHandle: string, name: string) {
     return `@[${name.replace('@', '')}](urn:li:organization:${idOrHandle})`;
+  }
+
+  protected getRedirectUri() {
+    const explicitRedirect = process.env.LINKEDIN_REDIRECT_URI?.trim();
+    if (explicitRedirect) {
+      return explicitRedirect;
+    }
+
+    const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/+$/, '');
+    return `${frontendUrl}/integrations/social/linkedin`;
   }
 }

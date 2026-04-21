@@ -123,11 +123,10 @@ export class LinkedinPageProvider
   override async generateAuthUrl() {
     const state = makeId(6);
     const codeVerifier = makeId(30);
+    const redirectUri = this.getPageRedirectUri();
     const url = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&prompt=none&client_id=${
       process.env.LINKEDIN_CLIENT_ID
-    }&redirect_uri=${encodeURIComponent(
-      `${process.env.FRONTEND_URL}/integrations/social/linkedin-page`
-    )}&state=${state}&scope=${encodeURIComponent(this.scopes.join(' '))}`;
+    }&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=${encodeURIComponent(this.scopes.join(' '))}`;
     return {
       url,
       codeVerifier,
@@ -209,10 +208,7 @@ export class LinkedinPageProvider
     const body = new URLSearchParams();
     body.append('grant_type', 'authorization_code');
     body.append('code', params.code);
-    body.append(
-      'redirect_uri',
-      `${process.env.FRONTEND_URL}/integrations/social/linkedin-page`
-    );
+    body.append('redirect_uri', this.getPageRedirectUri());
     body.append('client_id', process.env.LINKEDIN_CLIENT_ID!);
     body.append('client_secret', process.env.LINKEDIN_CLIENT_SECRET!);
 
@@ -685,6 +681,16 @@ export class LinkedinPageProvider
     }
 
     return false;
+  }
+
+  private getPageRedirectUri() {
+    const explicitRedirect = process.env.LINKEDIN_PAGE_REDIRECT_URI?.trim();
+    if (explicitRedirect) {
+      return explicitRedirect;
+    }
+
+    const frontendUrl = (process.env.FRONTEND_URL || '').replace(/\/+$/, '');
+    return `${frontendUrl}/integrations/social/linkedin-page`;
   }
 }
 
