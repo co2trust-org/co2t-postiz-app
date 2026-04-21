@@ -50,6 +50,11 @@ const jakartaSans = Plus_Jakarta_Sans({
 
 export const LayoutComponent = ({ children }: { children: ReactNode }) => {
   const fetch = useFetch();
+  const releaseLabel =
+    process.env.NEXT_PUBLIC_GIT_RELEASE ||
+    process.env.NEXT_PUBLIC_VERSION ||
+    'local';
+  const branchLabel = process.env.NEXT_PUBLIC_GIT_BRANCH || 'local';
 
   const { backendUrl, billingEnabled, isGeneral } = useVariables();
 
@@ -109,7 +114,13 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                         )}
                       >
                         <div className="flex flex-col h-full gap-[32px] flex-1 py-[12px]">
-                          <Logo />
+                          <div className="relative">
+                            <Logo />
+                            <div className="absolute start-[66px] top-[8px] whitespace-nowrap rounded-[8px] bg-newBgColorInner border border-tableBorder px-[8px] py-[6px] text-[10px] leading-[1.2] text-textColor">
+                              <div>Branch: {branchLabel}</div>
+                              <div>Release: {releaseLabel}</div>
+                            </div>
+                          </div>
                           <TopMenu />
                         </div>
                       </div>

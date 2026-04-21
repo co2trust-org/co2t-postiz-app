@@ -1004,6 +1004,7 @@ const CalendarItem: FC<{
   };
 }> = memo((props) => {
   const t = useT();
+  const toaster = useToaster();
   const {
     editPost,
     statistics,
@@ -1036,6 +1037,24 @@ const CalendarItem: FC<{
     if (!raw) return null;
     return resolveCalendarMediaUrl(raw);
   }, [post.image]);
+  const [attachmentImageFailed, setAttachmentImageFailed] = useState(false);
+  useEffect(() => {
+    setAttachmentImageFailed(false);
+  }, [attachmentThumbUrl, post.id]);
+  const promptRegenerateAttachment = useCallback(
+    (event?: React.MouseEvent) => {
+      event?.stopPropagation();
+      toaster.show(
+        t(
+          'post_image_missing_regenerate_prompt',
+          'This attachment could not load. Open the post and regenerate the image.'
+        ),
+        'warning'
+      );
+      editPost();
+    },
+    [toaster, t, editPost]
+  );
   const preview = useCallback(() => {
     window.open(`/p/` + post.id + '?share=true', '_blank');
   }, [post]);
@@ -1192,7 +1211,7 @@ const CalendarItem: FC<{
           />
         </div>
         {attachmentThumbUrl && (
-          <div className="shrink-0">
+          <div className="shrink-0 flex flex-col gap-[6px]">
             <ImageWithFallback
               className={clsx(
                 'rounded-[8px] object-cover border border-newTableBorder bg-newTableHeader',
@@ -1202,7 +1221,19 @@ const CalendarItem: FC<{
               fallbackSrc="/no-picture.jpg"
               width={compact ? 36 : 88}
               height={compact ? 36 : 88}
+              onFallback={() => {
+                setAttachmentImageFailed(true);
+              }}
             />
+            {attachmentImageFailed && (
+              <button
+                type="button"
+                onClick={promptRegenerateAttachment}
+                className="text-[10px] text-warning underline text-start"
+              >
+                {t('regenerate_image', 'Regenerate image')}
+              </button>
+            )}
           </div>
         )}
         <div

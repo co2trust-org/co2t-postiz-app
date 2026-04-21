@@ -235,12 +235,64 @@ export const MenuComponent: FC<
   } = props;
   const user = useUser();
   const t = useT();
+  const fetch = useFetch();
+  const toast = useToaster();
+  const [isResyncingProfileImage, setIsResyncingProfileImage] = useState(false);
+  const [profileResyncAttempted, setProfileResyncAttempted] = useState(false);
   const [collected, drag, dragPreview] = useDrag(() => ({
     type: 'menu',
     item: {
       id: integration.id,
     },
   }));
+  useEffect(() => {
+    setProfileResyncAttempted(false);
+    setIsResyncingProfileImage(false);
+  }, [integration.id, integration.picture]);
+  const resyncProfileImage = useCallback(async () => {
+    if (profileResyncAttempted || isResyncingProfileImage) {
+      return;
+    }
+    setProfileResyncAttempted(true);
+    setIsResyncingProfileImage(true);
+    try {
+      const response = await fetch(
+        `/integrations/${integration.id}/resync-profile-image`,
+        {
+          method: 'POST',
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to resync image');
+      }
+
+      await mutate();
+      toast.show(
+        t(
+          'channel_profile_image_resynced',
+          'Profile image was re-synced from the channel.'
+        ),
+        'success'
+      );
+    } catch (err) {
+      toast.show(
+        t(
+          'channel_profile_image_resync_failed',
+          'Could not re-sync profile image. Please reconnect this channel.'
+        ),
+        'warning'
+      );
+    } finally {
+      setIsResyncingProfileImage(false);
+    }
+  }, [
+    profileResyncAttempted,
+    isResyncingProfileImage,
+    integration.id,
+    mutate,
+    t,
+  ]);
   return (
     <div
       // @ts-ignore
@@ -295,6 +347,7 @@ export const MenuComponent: FC<
           alt={integration.identifier}
           width={36}
           height={36}
+          onFallback={resyncProfileImage}
         />
         {integration.identifier === 'youtube' ? (
           <img

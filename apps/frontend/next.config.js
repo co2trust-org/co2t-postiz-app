@@ -1,8 +1,24 @@
 // @ts-check
 import { withSentryConfig } from '@sentry/nextjs';
+import { execSync } from 'node:child_process';
+
+const readGitValue = (command, fallback) => {
+  try {
+    return execSync(command, { encoding: 'utf8' }).trim() || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const gitBranch = readGitValue('git rev-parse --abbrev-ref HEAD', 'local');
+const gitRelease = readGitValue('git describe --tags --always --dirty', 'local');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    NEXT_PUBLIC_GIT_BRANCH: gitBranch,
+    NEXT_PUBLIC_GIT_RELEASE: gitRelease,
+  },
   experimental: {
     proxyTimeout: 90_000,
   },

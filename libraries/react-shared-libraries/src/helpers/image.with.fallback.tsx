@@ -5,10 +5,11 @@ interface ImageSrc {
   fallbackSrc: string;
   width: number;
   height: number;
+  onFallback?: () => void;
   [key: string]: any;
 }
 const ImageWithFallback: FC<ImageSrc> = (props) => {
-  const { src, fallbackSrc, ...rest } = props;
+  const { src, fallbackSrc, onFallback, onError, ...rest } = props;
   const [imgSrc, setImgSrc] = useState(src);
   useEffect(() => {
     if (src !== imgSrc) {
@@ -20,8 +21,10 @@ const ImageWithFallback: FC<ImageSrc> = (props) => {
       alt=""
       {...rest}
       src={imgSrc}
-      onError={() => {
+      onError={(event: any) => {
         setImgSrc(fallbackSrc);
+        onFallback?.();
+        onError?.(event);
       }}
     />
   );

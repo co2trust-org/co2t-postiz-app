@@ -9,6 +9,7 @@ import { IntegrationRepository } from '@gitroom/nestjs-libraries/database/prisma
 import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
 import {
   AnalyticsData,
+  AuthTokenDetails,
   SocialProvider,
 } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
 import { Integration, Organization } from '@prisma/client';
@@ -169,14 +170,11 @@ export class IntegrationService {
 
   async refreshToken(provider: SocialProvider, refresh: string) {
     try {
-      const { refreshToken, accessToken, expiresIn } =
-        await provider.refreshToken(refresh);
-
-      if (!refreshToken || !accessToken || !expiresIn) {
+      const details: AuthTokenDetails = await provider.refreshToken(refresh);
+      if (!details?.accessToken) {
         return false;
       }
-
-      return { refreshToken, accessToken, expiresIn };
+      return details;
     } catch (e) {
       return false;
     }
@@ -237,14 +235,15 @@ export class IntegrationService {
         undefined,
         !!provider.oneTimeToken,
         integration.organizationId,
-        integration.name,
-        undefined,
+        data.name || integration.name,
+        data.picture || integration.picture || undefined,
         'social',
-        integration.internalId,
+        String(data.id || integration.internalId),
         integration.providerIdentifier,
         accessToken,
         refreshToken,
-        expiresIn
+        expiresIn,
+        data.username || integration.profile || undefined
       );
     }
   }

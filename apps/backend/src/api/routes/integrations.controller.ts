@@ -174,6 +174,35 @@ export class IntegrationsController {
     return this._integrationService.updateNameAndUrl(id, name, url);
   }
 
+  @Post('/:id/resync-profile-image')
+  async resyncProfileImage(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    const integration = await this._integrationService.getIntegrationById(
+      org.id,
+      id
+    );
+    if (!integration) {
+      throw new Error('Invalid integration');
+    }
+
+    const refreshed = await this._refreshIntegrationService.refresh(
+      integration,
+      'Profile image resync requested by user'
+    );
+    if (!refreshed) {
+      throw new Error('Could not refresh integration profile image');
+    }
+
+    const updated = await this._integrationService.getIntegrationById(org.id, id);
+    return {
+      id,
+      picture: updated?.picture || '/no-picture.jpg',
+      name: updated?.name || integration.name,
+    };
+  }
+
   @Get('/:id')
   getSingleIntegration(
     @Param('id') id: string,
