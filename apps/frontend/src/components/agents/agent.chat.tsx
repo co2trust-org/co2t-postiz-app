@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { CopilotChat, CopilotKitCSSProperties } from '@copilotkit/react-ui';
@@ -78,10 +79,11 @@ type CachedImage = {
 
 export const AgentChat: FC = () => {
   const { backendUrl } = useVariables();
-  const params = useParams<{ id: string }>();
+  const params = useParams<{ id?: string }>();
   const { properties } = useContext(PropertiesContext);
   const t = useT();
   const [aiModel, setAiModel] = useState('gpt-4.1');
+  const threadId = typeof params?.id === 'string' ? params.id : 'new';
 
   useEffect(() => {
     const savedModel = localStorage.getItem(AGENT_MODEL_KEY);
@@ -95,7 +97,8 @@ export const AgentChat: FC = () => {
 
   return (
     <CopilotKit
-      {...(params.id === 'new' ? {} : { threadId: params.id })}
+      key={`agent-thread-${threadId}`}
+      {...(threadId === 'new' ? {} : { threadId })}
       credentials="include"
       runtimeUrl={backendUrl + '/copilot/agent'}
       showDevConsole={false}
@@ -106,7 +109,7 @@ export const AgentChat: FC = () => {
       }}
     >
       <Hooks />
-      <LoadMessages id={params.id} />
+      <LoadMessages id={threadId} />
       <div
         style={
           {
@@ -526,12 +529,14 @@ function mapRoleToCopilot(
   return MessageRole.Assistant;
 }
 
-const LoadMessages: FC<{ id: string }> = ({ id }) => {
+const LoadMessages: FC<{ id?: string }> = ({ id }) => {
   const { setMessages } = useCopilotMessagesContext();
   const fetch = useFetch();
+  const requestIdRef = useRef(0);
 
   const loadMessages = useCallback(
     async (idToSet: string) => {
+      const currentRequestId = ++requestIdRef.current;
       try {
         const res = await fetch(`/copilot/${idToSet}/list`);
         if (!res.ok) {
@@ -540,6 +545,9 @@ const LoadMessages: FC<{ id: string }> = ({ id }) => {
             idToSet,
             res.status
           );
+          if (currentRequestId !== requestIdRef.current) {
+            return;
+          }
           setMessages([]);
           return;
         }
@@ -556,7 +564,13 @@ const LoadMessages: FC<{ id: string }> = ({ id }) => {
               }))
             : []);
         if (!Array.isArray(rows)) {
+          if (currentRequestId !== requestIdRef.current) {
+            return;
+          }
           setMessages([]);
+          return;
+        }
+        if (currentRequestId !== requestIdRef.current) {
           return;
         }
         setMessages(
@@ -569,6 +583,9 @@ const LoadMessages: FC<{ id: string }> = ({ id }) => {
         );
       } catch (e) {
         console.warn('[agent] load thread messages error', idToSet, e);
+        if (currentRequestId !== requestIdRef.current) {
+          return;
+        }
         setMessages([]);
       }
     },
@@ -576,7 +593,8 @@ const LoadMessages: FC<{ id: string }> = ({ id }) => {
   );
 
   useEffect(() => {
-    if (id === 'new') {
+    if (!id || id === 'new') {
+      requestIdRef.current += 1;
       setMessages([]);
       return;
     }

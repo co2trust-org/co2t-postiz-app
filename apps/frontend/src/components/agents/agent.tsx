@@ -4,6 +4,7 @@ import React, {
   createContext,
   FC,
   useCallback,
+  useEffect,
   useMemo,
   useState,
   ReactNode,
@@ -20,7 +21,7 @@ import { useWaitForClass } from '@gitroom/helpers/utils/use.wait.for.class';
 import { MultiMediaComponent } from '@gitroom/frontend/components/media/media.component';
 import { Integration } from '@prisma/client';
 import Link from 'next/link';
-import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
 
 export const MediaPortal: FC<{
@@ -93,7 +94,7 @@ export const AgentList: FC<{ onChange: (arr: any[]) => void }> = ({
         setSelected([...selected, integration]);
       }
     },
-    [selected]
+    [onChange, selected]
   );
 
   const sortedIntegrations = useMemo(() => {
@@ -214,7 +215,6 @@ const THREAD_LIST_POLL_MS = 60_000;
 
 const Threads: FC = () => {
   const fetch = useFetch();
-  const router = useRouter();
   const pathname = usePathname();
   const t = useT();
   const threads = useCallback(async () => {
@@ -222,16 +222,28 @@ const Threads: FC = () => {
     if (!res.ok) {
       throw new Error(`threads ${res.status}`);
     }
-    return res.json();
+    const data = await res.json();
+    return {
+      threads: Array.isArray(data?.threads) ? data.threads : [],
+    };
   }, [fetch]);
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id?: string }>();
+  const id = typeof params?.id === 'string' ? params.id : 'new';
 
   const { data, error, isLoading, mutate } = useSWR(THREADS_SWR_KEY, threads, {
     refreshInterval: THREAD_LIST_POLL_MS,
     revalidateOnFocus: true,
     revalidateOnReconnect: true,
     dedupingInterval: 5_000,
+    shouldRetryOnError: true,
+    errorRetryCount: 3,
+    keepPreviousData: true,
+    fallbackData: { threads: [] },
   });
+
+  useEffect(() => {
+    mutate();
+  }, [id, pathname, mutate]);
 
   return (
     <div
