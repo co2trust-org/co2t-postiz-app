@@ -2,9 +2,21 @@
 import { withSentryConfig } from '@sentry/nextjs';
 import { execSync } from 'node:child_process';
 
+/**
+ * Resolve a git-derived label for build metadata.
+ * Returns the provided fallback when git is unavailable.
+ * @param {string} command
+ * @param {string} fallback
+ * @returns {string}
+ */
 const readGitValue = (command, fallback) => {
   try {
-    return execSync(command, { encoding: 'utf8' }).trim() || fallback;
+    return (
+      execSync(command, {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim() || fallback
+    );
   } catch {
     return fallback;
   }
