@@ -3,6 +3,13 @@ import { withSentryConfig } from '@sentry/nextjs';
 import { execSync } from 'node:child_process';
 
 /**
+ * @param {Array<string | undefined>} values
+ * @returns {string | undefined}
+ */
+const firstNonEmpty = (values) =>
+  values.find((value) => typeof value === 'string' && value.trim().length > 0);
+
+/**
  * Resolve a git-derived label for build metadata.
  * Returns the provided fallback when git is unavailable.
  * @param {string} command
@@ -22,8 +29,23 @@ const readGitValue = (command, fallback) => {
   }
 };
 
-const gitBranch = readGitValue('git rev-parse --abbrev-ref HEAD', 'local');
-const gitRelease = readGitValue('git describe --tags --always --dirty', 'local');
+const gitBranch =
+  firstNonEmpty([
+    process.env.NEXT_PUBLIC_GIT_BRANCH,
+    process.env.RAILWAY_GIT_BRANCH,
+    process.env.VERCEL_GIT_COMMIT_REF,
+    process.env.GITHUB_HEAD_REF,
+    process.env.GITHUB_REF_NAME,
+  ]) || readGitValue('git rev-parse --abbrev-ref HEAD', 'local');
+
+const gitRelease =
+  firstNonEmpty([
+    process.env.NEXT_PUBLIC_GIT_RELEASE,
+    process.env.RAILWAY_GIT_COMMIT_SHA,
+    process.env.VERCEL_GIT_COMMIT_SHA,
+    process.env.GITHUB_SHA,
+    process.env.NEXT_PUBLIC_VERSION,
+  ]) || readGitValue('git describe --tags --always --dirty', 'local');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
