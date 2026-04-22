@@ -39,6 +39,7 @@ import { ExistingDataContextProvider } from '@gitroom/frontend/components/launch
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
 import useSWR from 'swr';
 import { useAddProviderAndConnect } from '@gitroom/frontend/components/launches/add.provider.component';
+import { BrandBrainPanel } from '@gitroom/frontend/components/agents/brand.brain.panel';
 
 const POLL_NOTES_KEY = 'agent.poll.history.notes';
 const POLL_IMAGES_KEY = 'agent.poll.history.images';
@@ -66,6 +67,37 @@ const MAX_PROMPT_CHARS = 8000;
 const MAX_INTEGRATION_CONTEXT_LENGTH = 3500;
 const MAX_INTEGRATIONS_IN_CONTEXT = 20;
 
+export type AgentChatMode = 'agent' | 'brand-brain';
+
+type BrandBrainQuestion = {
+  id: string;
+  question: string;
+  options: string[];
+};
+
+const BRAND_BRAIN_QUESTIONS: BrandBrainQuestion[] = [
+  {
+    id: 'goal',
+    question: 'Primary social goal',
+    options: ['Awareness', 'Engagement', 'Leads', 'Community trust'],
+  },
+  {
+    id: 'voice',
+    question: 'Preferred voice',
+    options: ['Thought leader', 'Educational', 'Bold challenger', 'Human and warm'],
+  },
+  {
+    id: 'priority_channel',
+    question: 'Priority channel',
+    options: ['LinkedIn', 'Instagram', 'X', 'Threads'],
+  },
+  {
+    id: 'cadence',
+    question: 'Posting cadence',
+    options: ['3x week', '5x week', 'Daily', 'Campaign bursts'],
+  },
+];
+
 type SocialIntegration = {
   id: string;
   name: string;
@@ -82,7 +114,7 @@ type CachedImage = {
   dataUrl: string;
 };
 
-export const AgentChat: FC = () => {
+export const AgentChat: FC<{ mode?: AgentChatMode }> = ({ mode = 'agent' }) => {
   const { backendUrl } = useVariables();
   const params = useParams<{ id?: string }>();
   const { properties } = useContext(PropertiesContext);
@@ -111,6 +143,7 @@ export const AgentChat: FC = () => {
       properties={{
         integrations: properties,
         aiModel,
+        uiMode: mode,
       }}
     >
       <Hooks />
@@ -125,13 +158,29 @@ export const AgentChat: FC = () => {
         className="trz agent bg-newBgColorInner flex flex-col gap-[15px] transition-all flex-1 items-center relative"
       >
         <div className="absolute left-0 w-full h-full pb-[20px] px-[20px] pt-[20px] flex flex-col gap-[12px]">
-          <PollAccountHistoryPanel aiModel={aiModel} onModelChange={setAiModel} />
+          {mode === 'agent' && (
+            <PollAccountHistoryPanel aiModel={aiModel} onModelChange={setAiModel} />
+          )}
+          {mode === 'brand-brain' && <BrandBrainPanel />}
           <div className="w-full flex-1 min-h-0">
             <CopilotChat
               className="w-full h-full"
               labels={{
-                title: t('your_assistant', 'Your Assistant'),
-                initial: t('agent_welcome_message', `Hello, I am your Postiz agent 🙌🏻.
+                title:
+                  mode === 'brand-brain'
+                    ? t('brand_brain', 'Brand Brain')
+                    : t('your_assistant', 'Your Assistant'),
+                initial:
+                  mode === 'brand-brain'
+                    ? t(
+                        'brand_brain_welcome_message',
+                        `Hello, I am your Brand Brain.
+
+I will help you build a practical social media model from your brand strategy.
+
+Use the directed multiple choice prompts above the input to shape the model, then ask for post clusters, campaign ideas, and weekly plans.`
+                      )
+                    : t('agent_welcome_message', `Hello, I am your Postiz agent 🙌🏻.
               
 I can schedule a post or multiple posts to multiple channels and generate pictures and videos.
 
@@ -143,7 +192,7 @@ You can also use me as an MCP Server, check Settings >> Public API
 `),
               }}
               UserMessage={Message}
-              Input={NewInput}
+              Input={(props) => <NewInput {...props} mode={mode} />}
             />
           </div>
         </div>
@@ -636,10 +685,17 @@ const Message: FC<UserMessageProps> = (props) => {
     />
   );
 };
-const NewInput: FC<InputProps> = (props) => {
+const NewInput: FC<InputProps & { mode?: AgentChatMode }> = ({
+  mode = 'agent',
+  ...props
+}) => {
   const [media, setMedia] = useState([] as { path: string; id: string }[]);
   const [value, setValue] = useState('');
   const { properties } = useContext(PropertiesContext);
+  const [brandBrainAnswers, setBrandBrainAnswers] = useState<Record<string, string>>(
+    {}
+  );
+  const t = useT();
 
   const buildIntegrationsContext = useCallback(() => {
     if (!properties.length) {
@@ -664,8 +720,78 @@ Use the following social media platforms: ${serialized}
 [--integrations--]`;
   }, [properties]);
 
+  const setBrandBrainAnswer = useCallback((questionId: string, option: string) => {
+    setBrandBrainAnswers((prev) => ({ ...prev, [questionId]: option }));
+  }, []);
+
+  const brandBrainModelContext = useMemo(() => {
+    const selected = BRAND_BRAIN_QUESTIONS.map((question) => ({
+      question: question.question,
+      answer: brandBrainAnswers[question.id],
+    })).filter((item) => item.answer);
+    if (!selected.length) return '';
+
+    return `[--brand-brain-model--]
+Use this social model context while answering:
+${selected.map((item) => `- ${item.question}: ${item.answer}`).join('\n')}
+[--brand-brain-model--]`;
+  }, [brandBrainAnswers]);
+
+  const sendBrandBrainModel = useCallback(() => {
+    if (!brandBrainModelContext) {
+      return;
+    }
+    props.onSend(
+      `${brandBrainModelContext}
+
+Ask me one focused follow-up multiple choice question to refine this model further, then suggest 3 post clusters for this strategy.`
+    );
+  }, [brandBrainModelContext, props]);
+
   return (
     <>
+      {mode === 'brand-brain' && (
+        <div className="mb-[8px] rounded-[10px] border border-newTableBorder bg-newTableHeader p-[10px] flex flex-col gap-[8px]">
+          <div className="text-[12px] font-[600]">
+            {t(
+              'brand_brain_guided_questions',
+              'Guided strategy questions (multiple choice)'
+            )}
+          </div>
+          {BRAND_BRAIN_QUESTIONS.map((question) => (
+            <div key={question.id} className="flex flex-col gap-[6px]">
+              <div className="text-[12px] opacity-80">{question.question}</div>
+              <div className="flex flex-wrap gap-[6px]">
+                {question.options.map((option) => (
+                  <button
+                    key={`${question.id}-${option}`}
+                    type="button"
+                    onClick={() => setBrandBrainAnswer(question.id, option)}
+                    className={clsx(
+                      'rounded-[8px] border px-[8px] py-[4px] text-[11px]',
+                      brandBrainAnswers[question.id] === option
+                        ? 'bg-btnPrimary text-white border-btnPrimary'
+                        : 'bg-newBgColor border-newTableBorder'
+                    )}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={sendBrandBrainModel}
+              disabled={!brandBrainModelContext}
+              className="h-[32px] px-[10px] rounded-[8px] bg-btnPrimary text-btnText disabled:opacity-50"
+            >
+              {t('send_to_brand_brain', 'Send model to Brand Brain')}
+            </button>
+          </div>
+        </div>
+      )}
       <MediaPortal
         value={value}
         media={media}
@@ -676,6 +802,7 @@ Use the following social media platforms: ${serialized}
         onChange={setValue}
         onSend={(text) => {
           const integrationsContext = buildIntegrationsContext();
+          const brainContext = mode === 'brand-brain' ? brandBrainModelContext : '';
           const prompt = (
             text +
             (media.length > 0
@@ -689,7 +816,8 @@ Use the following social media platforms: ${serialized}
                   .join('\n') +
                 '\n[--Media--]'
               : '') +
-            (integrationsContext ? `\n${integrationsContext}` : '')
+            (integrationsContext ? `\n${integrationsContext}` : '') +
+            (brainContext ? `\n${brainContext}` : '')
           ).slice(0, MAX_PROMPT_CHARS);
 
           const send = props.onSend(

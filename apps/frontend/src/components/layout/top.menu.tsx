@@ -75,6 +75,34 @@ export const useMenuItem = () => {
       path: '/agents',
     },
     {
+      name: t('brand_brain', 'Brand Brain'),
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="23"
+          height="23"
+          viewBox="0 0 24 24"
+          fill="none"
+        >
+          <path
+            d="M8.5 9.5C8.5 8.11929 9.61929 7 11 7H13C14.3807 7 15.5 8.11929 15.5 9.5C15.5 10.3284 15.0974 11.0628 14.4782 11.5162C15.3974 11.9563 16 12.8945 16 13.9737V15C16 16.1046 15.1046 17 14 17H10C8.89543 17 8 16.1046 8 15V13.9737C8 12.8945 8.60258 11.9563 9.52181 11.5162C8.90259 11.0628 8.5 10.3284 8.5 9.5Z"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M12 2.5C7.30558 2.5 3.5 6.30558 3.5 11C3.5 14.1924 5.26045 16.9736 7.86363 18.4301C8.21167 18.6248 8.5 18.9261 8.5 19.3249V20.5C8.5 21.0523 8.94772 21.5 9.5 21.5H14.5C15.0523 21.5 15.5 21.0523 15.5 20.5V19.3249C15.5 18.9261 15.7883 18.6248 16.1364 18.4301C18.7395 16.9736 20.5 14.1924 20.5 11C20.5 6.30558 16.6944 2.5 12 2.5Z"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ),
+      path: '/brand-brain',
+    },
+    {
       name: t('analytics', 'Analytics'),
       icon: (
         <svg

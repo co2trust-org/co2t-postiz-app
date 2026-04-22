@@ -60,6 +60,8 @@ function textFromMastraDbMessage(msg: Record<string, unknown>): string {
 
 const ALLOWED_OPENAI_MODELS = ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano'];
 const DEFAULT_OPENAI_MODEL = 'gpt-4.1';
+const MAX_THREAD_LIST_LIMIT = 200;
+const MAX_THREAD_RECALL_MESSAGES = 200;
 
 @Controller('/copilot')
 export class CopilotController {
@@ -175,7 +177,8 @@ export class CopilotController {
       const recalled = await memory.recall({
         resourceId: organization.id,
         threadId,
-        perPage: false,
+        page: 0,
+        perPage: MAX_THREAD_RECALL_MESSAGES,
       });
       const raw = recalled.messages || [];
       const uiMessages = (raw as Record<string, unknown>[]).map((m) => ({
@@ -202,18 +205,25 @@ export class CopilotController {
   async getList(@GetOrgFromRequest() organization: Organization) {
     const mastra = await this._mastraService.mastra();
     const memory = await mastra.getAgent('postiz').getMemory();
-    const list = await memory.listThreads({
-      filter: { resourceId: organization.id },
-      perPage: 100000,
-      page: 0,
-      orderBy: { field: 'createdAt', direction: 'DESC' },
-    });
+    try {
+      const list = await memory.listThreads({
+        filter: { resourceId: organization.id },
+        perPage: MAX_THREAD_LIST_LIMIT,
+        page: 0,
+        orderBy: { field: 'createdAt', direction: 'DESC' },
+      });
 
-    return {
-      threads: list.threads.map((p) => ({
-        id: p.id,
-        title: p.title,
-      })),
-    };
+      return {
+        threads: list.threads.map((p) => ({
+          id: p.id,
+          title: p.title,
+        })),
+      };
+    } catch (err) {
+      Logger.warn(
+        `copilot thread list failed orgId=${organization.id}: ${(err as Error)?.message}`
+      );
+      return { threads: [], error: 'load_failed' };
+    }
   }
 }
