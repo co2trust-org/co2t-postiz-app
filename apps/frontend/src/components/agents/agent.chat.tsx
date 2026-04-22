@@ -60,6 +60,11 @@ const AGENT_MODEL_OPTIONS = [
     label: 'gpt-4.1-nano (cheapest)',
   },
 ];
+const MAX_THREAD_MESSAGES = 200;
+const MAX_MESSAGE_CONTENT_CHARS = 12000;
+const MAX_PROMPT_CHARS = 8000;
+const MAX_INTEGRATION_CONTEXT_LENGTH = 3500;
+const MAX_INTEGRATIONS_IN_CONTEXT = 20;
 
 type SocialIntegration = {
   id: string;
@@ -570,13 +575,14 @@ const LoadMessages: FC<{ id?: string }> = ({ id }) => {
           setMessages([]);
           return;
         }
+        const slicedRows = rows.slice(-MAX_THREAD_MESSAGES);
         if (currentRequestId !== requestIdRef.current) {
           return;
         }
         setMessages(
-          rows.map((p: { role: string; content: string }) => {
+          slicedRows.map((p: { role: string; content: string }) => {
             return new TextMessage({
-              content: String(p.content ?? ''),
+              content: String(p.content ?? '').slice(0, MAX_MESSAGE_CONTENT_CHARS),
               role: mapRoleToCopilot(p.role),
             });
           })
@@ -634,6 +640,30 @@ const NewInput: FC<InputProps> = (props) => {
   const [media, setMedia] = useState([] as { path: string; id: string }[]);
   const [value, setValue] = useState('');
   const { properties } = useContext(PropertiesContext);
+
+  const buildIntegrationsContext = useCallback(() => {
+    if (!properties.length) {
+      return '';
+    }
+
+    const safeIntegrations = properties
+      .slice(0, MAX_INTEGRATIONS_IN_CONTEXT)
+      .map((p) => ({
+        id: p.id,
+        platform: p.identifier,
+        profilePicture: p.picture,
+      }));
+
+    let serialized = JSON.stringify(safeIntegrations);
+    if (serialized.length > MAX_INTEGRATION_CONTEXT_LENGTH) {
+      serialized = serialized.slice(0, MAX_INTEGRATION_CONTEXT_LENGTH) + '…';
+    }
+
+    return `[--integrations--]
+Use the following social media platforms: ${serialized}
+[--integrations--]`;
+  }, [properties]);
+
   return (
     <>
       <MediaPortal
@@ -645,34 +675,25 @@ const NewInput: FC<InputProps> = (props) => {
         {...props}
         onChange={setValue}
         onSend={(text) => {
-          const send = props.onSend(
+          const integrationsContext = buildIntegrationsContext();
+          const prompt = (
             text +
-              (media.length > 0
-                ? '\n[--Media--]' +
-                  media
-                    .map((m) =>
-                      m.path.indexOf('mp4') > -1
-                        ? `Video: ${m.path}`
-                        : `Image: ${m.path}`
-                    )
-                    .join('\n') +
-                  '\n[--Media--]'
-                : '') +
-              `
-${
-  properties.length
-    ? `[--integrations--]
-Use the following social media platforms: ${JSON.stringify(
-        properties.map((p) => ({
-          id: p.id,
-          platform: p.identifier,
-          profilePicture: p.picture,
-          additionalSettings: p.additionalSettings,
-        }))
-      )}
-[--integrations--]`
-    : ``
-}`
+            (media.length > 0
+              ? '\n[--Media--]' +
+                media
+                  .map((m) =>
+                    m.path.indexOf('mp4') > -1
+                      ? `Video: ${m.path}`
+                      : `Image: ${m.path}`
+                  )
+                  .join('\n') +
+                '\n[--Media--]'
+              : '') +
+            (integrationsContext ? `\n${integrationsContext}` : '')
+          ).slice(0, MAX_PROMPT_CHARS);
+
+          const send = props.onSend(
+            prompt
           );
           setValue('');
           setMedia([]);
