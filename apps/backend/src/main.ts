@@ -69,8 +69,9 @@ async function start() {
 
   loadSwagger(app);
 
-  // Railway may override PORT for edge routing; keep backend internal port stable for nginx.
-  const port = process.env.BACK_END_PORT || process.env.PORT || 3000;
+  // Nginx (var/docker/nginx.conf) proxies /api to localhost:3000. Railway and similar platforms set
+  // PORT to the public edge port; the API must still listen on the internal port nginx expects.
+  const port = Number(process.env.BACK_END_PORT) || 3000;
 
   try {
     await app.listen(port);
