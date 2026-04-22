@@ -1,6 +1,8 @@
 FROM node:22.20-bookworm-slim
 ARG NEXT_PUBLIC_VERSION
 ENV NEXT_PUBLIC_VERSION=$NEXT_PUBLIC_VERSION
+# Nginx listens on $PORT; Nest must stay on 3000 for proxy_pass in var/docker/nginx.conf
+ENV BACK_END_PORT=3000
 RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     make \

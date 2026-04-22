@@ -69,8 +69,11 @@ async function start() {
 
   loadSwagger(app);
 
-  // Railway may override PORT for edge routing; keep backend internal port stable for nginx.
-  const port = process.env.BACK_END_PORT || process.env.PORT || 3000;
+  // In the Docker+nginx image, Nginx binds the public $PORT; the API must use a fixed loopback
+  // port (see Dockerfile ENV BACK_END_PORT and var/docker/start.sh). Do not fall back to $PORT
+  // here, or the API may bind the same port as Nginx or a port nginx is not proxying to.
+  // For a backend-only process on Railway, set BACK_END_PORT to that service’s PORT in env.
+  const port = Number(process.env.BACK_END_PORT || 3000);
 
   try {
     await app.listen(port);
