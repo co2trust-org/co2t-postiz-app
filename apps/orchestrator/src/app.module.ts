@@ -13,10 +13,13 @@ const activities = [
   EmailActivity,
   IntegrationsActivity,
 ];
+const temporalEnabled = process.env.TEMPORAL_OPTIONAL !== 'true';
 @Module({
   imports: [
     DatabaseModule,
-    getTemporalModule(true, require.resolve('./workflows'), activities),
+    ...(temporalEnabled
+      ? [getTemporalModule(true, require.resolve('./workflows'), activities)]
+      : []),
   ],
   controllers: [HealthController],
   providers: [...activities],
