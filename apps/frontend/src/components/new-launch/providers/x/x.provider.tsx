@@ -104,9 +104,12 @@ export default withProvider({
     }
     for (const load of posts?.flatMap((p) => p?.flatMap((a) => a?.path)) ?? []) {
       if ((load?.indexOf?.('mp4') ?? -1) > -1) {
-        const isValid = await checkVideoDuration(load, premium);
-        if (!isValid) {
+        const result = await checkVideoDuration(load, premium);
+        if (result === 'too_long') {
           return 'Video duration must be less than or equal to 140 seconds.';
+        }
+        if (result === 'failed') {
+          return 'Could not load video metadata. Check the file or your connection and try again.';
         }
       }
     }
@@ -119,25 +122,62 @@ export default withProvider({
     return 280;
   },
 });
+type VideoDurationResult = 'ok' | 'too_long' | 'failed';
+
+const VIDEO_METADATA_TIMEOUT_MS = 20_000;
+
 const checkVideoDuration = async (
   url: string,
   isPremium = false
-): Promise<boolean> => {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    video.src = url;
-    video.preload = 'metadata';
-    video.onloadedmetadata = () => {
-      // Check if the duration is less than or equal to 140 seconds
-      const duration = video.duration;
-      if ((!isPremium && duration <= 140) || isPremium) {
-        resolve(true); // Video duration is acceptable
-      } else {
-        resolve(false); // Video duration exceeds 140 seconds
-      }
-    };
-    video.onerror = () => {
-      reject(new Error('Failed to load video metadata.'));
-    };
-  });
+): Promise<VideoDurationResult> => {
+  try {
+    const duration = await new Promise<number>((resolve, reject) => {
+      const video = document.createElement('video');
+      let settled = false;
+      const detach = () => {
+        video.onloadedmetadata = null;
+        video.onerror = null;
+        video.removeAttribute('src');
+        video.load();
+      };
+      const timer = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        detach();
+        reject(new Error('timeout'));
+      }, VIDEO_METADATA_TIMEOUT_MS);
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        detach();
+        resolve(video.duration);
+      };
+      video.onerror = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        detach();
+        reject(new Error('error'));
+      };
+      video.src = url;
+    });
+    if (!Number.isFinite(duration) || duration < 0) {
+      return 'failed';
+    }
+    if ((!isPremium && duration <= 140) || isPremium) {
+      return 'ok';
+    }
+    return 'too_long';
+  } catch {
+    return 'failed';
+  }
 };

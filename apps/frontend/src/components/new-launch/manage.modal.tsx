@@ -245,198 +245,196 @@ export const ManageModal: FC<AddEditModalProps> = (props) => {
       }
 
       setLoading(true);
-      const checkAllValid = await ref.current.checkAllValid();
+      try {
+        const checkAllValid = await ref.current.checkAllValid();
 
-      const notEnoughChars = checkAllValid.filter((p: any) => {
-        return p.values.some((a: any) => {
-          return (
-            countCharacters(
-              stripHtmlValidation('normal', a.content, true),
-              p?.integration?.identifier || ''
-            ) === 0 && a.media?.length === 0
-          );
-        });
-      });
-
-      for (const item of notEnoughChars) {
-        toaster.show(
-          `${capitalize(item.integration.identifier.split('-')[0])} (${
-            item.integration.name
-          }):` +
-            ' ' +
-            t(
-              'post_needs_content_or_image',
-              'Your post should have at least one character or one image.'
-            ),
-          'warning'
-        );
-        setLoading(false);
-        item.preview();
-        return;
-      }
-
-      if (type !== 'draft') {
-        for (const item of checkAllValid) {
-          if (item.valid === false) {
-            toaster.show(
-              `${capitalize(item.integration.identifier.split('-')[0])} (${
-                item.integration.name
-              }): ${t('please_fix_your_settings', 'Please fix your settings')}`,
-              'warning'
-            );
-            item.fix();
-            setLoading(false);
-            setShowSettings(true);
-            return;
-          }
-
-          if (item.errors !== true) {
-            toaster.show(
-              `${capitalize(item.integration.identifier.split('-')[0])} (${
-                item.integration.name
-              }): ${item.errors}`,
-              'warning'
-            );
-            item.preview();
-            setLoading(false);
-            setShowSettings(false);
-            return;
-          }
-        }
-
-        const sliceNeeded = checkAllValid.filter((p: any) => {
+        const notEnoughChars = checkAllValid.filter((p: any) => {
           return p.values.some((a: any) => {
-            const strip = stripHtmlValidation('normal', a.content, true);
-            const weightedLength = countCharacters(
-              strip,
-              p?.integration?.identifier || ''
+            return (
+              countCharacters(
+                stripHtmlValidation('normal', a.content, true),
+                p?.integration?.identifier || ''
+              ) === 0 && a.media?.length === 0
             );
-            const totalCharacters =
-              weightedLength > strip.length ? weightedLength : strip.length;
-
-            return totalCharacters > (p.maximumCharacters || 1000000);
           });
         });
 
-        for (const item of sliceNeeded) {
+        for (const item of notEnoughChars) {
           toaster.show(
-            `${item?.integration?.name} (${item?.integration?.identifier}) ${t(
-              'post_is_too_long',
-              'post is too long, please fix it'
-            )}`,
+            `${capitalize(item.integration.identifier.split('-')[0])} (${
+              item.integration.name
+            }):` +
+              ' ' +
+              t(
+                'post_needs_content_or_image',
+                'Your post should have at least one character or one image.'
+              ),
             'warning'
           );
           item.preview();
-          setLoading(false);
           return;
         }
-      }
 
-      const shortlinkPreference = shortlinkPreferenceData?.shortlink || 'ASK';
+        if (type !== 'draft') {
+          for (const item of checkAllValid) {
+            if (item.valid === false) {
+              toaster.show(
+                `${capitalize(item.integration.identifier.split('-')[0])} (${
+                  item.integration.name
+                }): ${t('please_fix_your_settings', 'Please fix your settings')}`,
+                'warning'
+              );
+              item.fix();
+              setShowSettings(true);
+              return;
+            }
 
-      let shortLink = false;
+            if (item.errors !== true) {
+              toaster.show(
+                `${capitalize(item.integration.identifier.split('-')[0])} (${
+                  item.integration.name
+                }): ${item.errors}`,
+                'warning'
+              );
+              item.preview();
+              setShowSettings(false);
+              return;
+            }
+          }
 
-      if (!dummy && shortlinkPreference !== 'NO') {
-        const shortLinkUrl = await (
-          await fetch('/posts/should-shortlink', {
-            method: 'POST',
-            body: JSON.stringify({
-              messages: checkAllValid.flatMap((p: any) =>
-                p.values.flatMap((a: any) => a.content)
-              ),
-            }),
-          })
-        ).json();
+          const sliceNeeded = checkAllValid.filter((p: any) => {
+            return p.values.some((a: any) => {
+              const strip = stripHtmlValidation('normal', a.content, true);
+              const weightedLength = countCharacters(
+                strip,
+                p?.integration?.identifier || ''
+              );
+              const totalCharacters =
+                weightedLength > strip.length ? weightedLength : strip.length;
 
-        if (shortLinkUrl.ask) {
-          if (shortlinkPreference === 'YES') {
-            // Automatically shortlink without asking
-            shortLink = true;
-          } else {
-            // ASK: Show the dialog
-            shortLink = await deleteDialog(
-              t(
-                'shortlink_urls_question',
-                'Do you want to shortlink the URLs? it will let you get statistics over clicks'
-              ),
-              t('yes_shortlink_it', 'Yes, shortlink it!')
+              return totalCharacters > (p.maximumCharacters || 1000000);
+            });
+          });
+
+          for (const item of sliceNeeded) {
+            toaster.show(
+              `${item?.integration?.name} (${item?.integration?.identifier}) ${t(
+                'post_is_too_long',
+                'post is too long, please fix it'
+              )}`,
+              'warning'
             );
+            item.preview();
+            return;
           }
         }
-      }
 
-      const group = existingData.group || makeId(10);
-      const data = {
-        type,
-        ...(repeater ? { inter: repeater } : {}),
-        tags,
-        shortLink,
-        date: date.utc().format('YYYY-MM-DDTHH:mm:ss'),
-        posts: checkAllValid.map((post: any) => ({
-          integration: {
-            id: post.integration.id,
-          },
-          group,
-          settings: { ...(post.settings || {}) },
-          value: post.values.map((value: any) => ({
-            ...(value.id ? { id: value.id } : {}),
-            content: value.content,
-            delay: value.delay || 0,
-            image:
-              (value?.media || []).map(
-                ({ id, path, alt, thumbnail, thumbnailTimestamp }: any) => ({
-                  id,
-                  path,
-                  alt,
-                  thumbnail,
-                  thumbnailTimestamp,
-                })
-              ) || [],
-          })),
-        })),
-      };
+        const shortlinkPreference = shortlinkPreferenceData?.shortlink || 'ASK';
 
-      if (dummy) {
-        modal.openModal({
-          title: '',
-          children: <DummyCodeComponent code={data} />,
-          classNames: {
-            modal: 'w-[100%] bg-transparent text-textColor',
-          },
-          size: '100%',
-          withCloseButton: false,
-          closeOnEscape: true,
-          closeOnClickOutside: true,
-        });
+        let shortLink = false;
 
-        setLoading(false);
-      }
-
-      if (!dummy) {
-        addEditSets
-          ? addEditSets(data)
-          : await fetch('/posts', {
+        if (!dummy && shortlinkPreference !== 'NO') {
+          const shortLinkUrl = await (
+            await fetch('/posts/should-shortlink', {
               method: 'POST',
-              body: JSON.stringify(data),
-            });
+              body: JSON.stringify({
+                messages: checkAllValid.flatMap((p: any) =>
+                  p.values.flatMap((a: any) => a.content)
+                ),
+              }),
+            })
+          ).json();
 
-        if (!addEditSets) {
-          mutate();
-          toaster.show(
-            !existingData.integration
-              ? t('added_successfully', 'Added successfully')
-              : t('updated_successfully', 'Updated successfully')
-          );
-        }
-        if (customClose) {
-          setTimeout(() => {
-            customClose();
-          }, 2000);
+          if (shortLinkUrl.ask) {
+            if (shortlinkPreference === 'YES') {
+              // Automatically shortlink without asking
+              shortLink = true;
+            } else {
+              // ASK: Show the dialog
+              shortLink = await deleteDialog(
+                t(
+                  'shortlink_urls_question',
+                  'Do you want to shortlink the URLs? it will let you get statistics over clicks'
+                ),
+                t('yes_shortlink_it', 'Yes, shortlink it!')
+              );
+            }
+          }
         }
 
-        if (!addEditSets) {
-          modal.closeAll();
+        const group = existingData.group || makeId(10);
+        const data = {
+          type,
+          ...(repeater ? { inter: repeater } : {}),
+          tags,
+          shortLink,
+          date: date.utc().format('YYYY-MM-DDTHH:mm:ss'),
+          posts: checkAllValid.map((post: any) => ({
+            integration: {
+              id: post.integration.id,
+            },
+            group,
+            settings: { ...(post.settings || {}) },
+            value: post.values.map((value: any) => ({
+              ...(value.id ? { id: value.id } : {}),
+              content: value.content,
+              delay: value.delay || 0,
+              image:
+                (value?.media || []).map(
+                  ({ id, path, alt, thumbnail, thumbnailTimestamp }: any) => ({
+                    id,
+                    path,
+                    alt,
+                    thumbnail,
+                    thumbnailTimestamp,
+                  })
+                ) || [],
+            })),
+          })),
+        };
+
+        if (dummy) {
+          modal.openModal({
+            title: '',
+            children: <DummyCodeComponent code={data} />,
+            classNames: {
+              modal: 'w-[100%] bg-transparent text-textColor',
+            },
+            size: '100%',
+            withCloseButton: false,
+            closeOnEscape: true,
+            closeOnClickOutside: true,
+          });
         }
+
+        if (!dummy) {
+          addEditSets
+            ? addEditSets(data)
+            : await fetch('/posts', {
+                method: 'POST',
+                body: JSON.stringify(data),
+              });
+
+          if (!addEditSets) {
+            mutate();
+            toaster.show(
+              !existingData.integration
+                ? t('added_successfully', 'Added successfully')
+                : t('updated_successfully', 'Updated successfully')
+            );
+          }
+          if (customClose) {
+            setTimeout(() => {
+              customClose();
+            }, 2000);
+          }
+
+          if (!addEditSets) {
+            modal.closeAll();
+          }
+        }
+      } finally {
+        setLoading(false);
       }
     },
     [ref, repeater, tags, date, addEditSets, dummy, shortlinkPreferenceData]
