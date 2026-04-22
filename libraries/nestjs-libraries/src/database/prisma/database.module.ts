@@ -42,6 +42,35 @@ import { AnnouncementsRepository } from '@gitroom/nestjs-libraries/database/pris
 import { AnnouncementsService } from '@gitroom/nestjs-libraries/database/prisma/announcements/announcements.service';
 import { ProductsRepository } from '@gitroom/nestjs-libraries/database/prisma/products/products.repository';
 import { ProductsService } from '@gitroom/nestjs-libraries/database/prisma/products/products.service';
+import { TemporalService } from 'nestjs-temporal-core';
+
+const temporalOptional = process.env.TEMPORAL_OPTIONAL === 'true';
+
+const temporalFallbackProvider = temporalOptional
+  ? [
+      {
+        provide: TemporalService,
+        useValue: {
+          client: {
+            getRawClient: () => ({
+              workflow: {
+                start: async () => undefined,
+                signalWithStart: async () => undefined,
+                list: async function* () {
+                  return;
+                },
+              },
+            }),
+            getWorkflowHandle: async () => ({
+              describe: async () => ({ status: { name: 'TERMINATED' } }),
+              terminate: async () => undefined,
+            }),
+          },
+          terminateWorkflow: async () => false,
+        } as TemporalService,
+      },
+    ]
+  : [];
 
 @Global()
 @Module({
@@ -93,6 +122,7 @@ import { ProductsService } from '@gitroom/nestjs-libraries/database/prisma/produ
     AnnouncementsService,
     ProductsRepository,
     ProductsService,
+    ...temporalFallbackProvider,
   ],
   get exports() {
     return this.providers;
