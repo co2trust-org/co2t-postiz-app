@@ -289,6 +289,8 @@ export const MenuComponent: FC<
   }, [
     profileResyncAttempted,
     isResyncingProfileImage,
+    fetch,
+    toast,
     integration.id,
     mutate,
     t,

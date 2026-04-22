@@ -69,7 +69,7 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
   const searchParams = useSearchParams();
   const load = useCallback(async (path: string) => {
     return await (await fetch(path)).json();
-  }, [fetch, buildTimeBranchLabel, buildTimeReleaseLabel]);
+  }, [fetch]);
   const { data: user, mutate } = useSWR('/user/self', load, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
