@@ -41,6 +41,8 @@ import { useT } from '@gitroom/react/translation/get.transation.service.client';
 import useSWR from 'swr';
 import { useAddProviderAndConnect } from '@gitroom/frontend/components/launches/add.provider.component';
 import { BrandBrainPanel } from '@gitroom/frontend/components/agents/brand.brain.panel';
+import { useOptionalBrandBrain } from '@gitroom/frontend/components/agents/brand.brain.context';
+import { formatBrandBrainForPrompt } from '@gitroom/frontend/components/agents/brand.brain.model';
 import { useLaunchStore } from '@gitroom/frontend/components/new-launch/store';
 import { useToaster } from '@gitroom/react/toaster/toaster';
 import { Integrations as SocialIntegrations } from '@gitroom/frontend/components/launches/calendar.context';
@@ -122,6 +124,7 @@ export const AgentChat: FC<{ mode?: AgentChatMode }> = ({ mode = 'agent' }) => {
   const { backendUrl } = useVariables();
   const params = useParams<{ id?: string }>();
   const { properties } = useContext(PropertiesContext);
+  const brandBrain = useOptionalBrandBrain();
   const t = useT();
   const [aiModel, setAiModel] = useState('gpt-4.1');
   const threadId = typeof params?.id === 'string' ? params.id : 'new';
@@ -148,6 +151,10 @@ export const AgentChat: FC<{ mode?: AgentChatMode }> = ({ mode = 'agent' }) => {
         integrations: properties,
         aiModel,
         uiMode: mode,
+        brandBrainCloud:
+          mode === 'brand-brain' && brandBrain
+            ? formatBrandBrainForPrompt(brandBrain.data)
+            : undefined,
       }}
     >
       <Hooks />
@@ -180,9 +187,9 @@ export const AgentChat: FC<{ mode?: AgentChatMode }> = ({ mode = 'agent' }) => {
                         'brand_brain_welcome_message',
                         `Hello, I am your Brand Brain.
 
-I will help you build a practical social media model from your brand strategy.
+Build parent brands and concepts in the cloud above, link missions to themes, then use "AI ideas (from cloud)" to send a full prompt, or type below.
 
-Use the directed multiple choice prompts above the input to shape the model, then ask for post clusters, campaign ideas, and weekly plans.`
+I use your cloud (not generic assumptions) to suggest on-brand posts, campaigns, and social angles.`
                       )
                     : t('agent_welcome_message', `Hello, I am your Postiz agent 🙌🏻.
               
@@ -696,6 +703,7 @@ const NewInput: FC<InputProps & { mode?: AgentChatMode }> = ({
   const [media, setMedia] = useState([] as { path: string; id: string }[]);
   const [value, setValue] = useState('');
   const { properties } = useContext(PropertiesContext);
+  const brandBrain = useOptionalBrandBrain();
   const [brandBrainAnswers, setBrandBrainAnswers] = useState<Record<string, string>>(
     {}
   );
@@ -733,7 +741,9 @@ Use the following social media platforms: ${serialized}
       question: question.question,
       answer: brandBrainAnswers[question.id],
     })).filter((item) => item.answer);
-    if (!selected.length) return '';
+    if (!selected.length) {
+      return '';
+    }
 
     return `[--brand-brain-model--]
 Use this social model context while answering:
@@ -741,16 +751,37 @@ ${selected.map((item) => `- ${item.question}: ${item.answer}`).join('\n')}
 [--brand-brain-model--]`;
   }, [brandBrainAnswers]);
 
+  const brandBrainFullContext = useMemo(() => {
+    if (!brandBrain) {
+      return '';
+    }
+    const cloud = formatBrandBrainForPrompt(brandBrain.data);
+    const m = brandBrainModelContext;
+    if (!m) {
+      return cloud;
+    }
+    return `${m}\n${cloud}`;
+  }, [brandBrain, brandBrainModelContext]);
+
   const sendBrandBrainModel = useCallback(() => {
-    if (!brandBrainModelContext) {
+    if (!brandBrainFullContext) {
       return;
     }
     props.onSend(
-      `${brandBrainModelContext}
+      `${brandBrainFullContext}
 
-Ask me one focused follow-up multiple choice question to refine this model further, then suggest 3 post clusters for this strategy.`
+Ask me one focused follow-up multiple choice question to refine this model further, then suggest 3 post clusters that connect the cloud concepts.`
     );
-  }, [brandBrainModelContext, props]);
+  }, [brandBrainFullContext, props]);
+
+  const prefillFromPanel = brandBrain?.pendingChatPrefill;
+  useEffect(() => {
+    if (mode !== 'brand-brain' || !prefillFromPanel || !brandBrain) {
+      return;
+    }
+    setValue(prefillFromPanel);
+    brandBrain.clearPendingChatPrefill();
+  }, [mode, prefillFromPanel, brandBrain]);
 
   return (
     <>
@@ -788,7 +819,7 @@ Ask me one focused follow-up multiple choice question to refine this model furth
             <button
               type="button"
               onClick={sendBrandBrainModel}
-              disabled={!brandBrainModelContext}
+              disabled={!brandBrainFullContext}
               className="h-[32px] px-[10px] rounded-[8px] bg-btnPrimary text-btnText disabled:opacity-50"
             >
               {t('send_to_brand_brain', 'Send model to Brand Brain')}
@@ -806,7 +837,7 @@ Ask me one focused follow-up multiple choice question to refine this model furth
         onChange={setValue}
         onSend={(text) => {
           const integrationsContext = buildIntegrationsContext();
-          const brainContext = mode === 'brand-brain' ? brandBrainModelContext : '';
+          const brainContext = mode === 'brand-brain' ? brandBrainFullContext : '';
           const prompt = (
             text +
             (media.length > 0
