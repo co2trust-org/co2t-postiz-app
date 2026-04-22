@@ -67,7 +67,7 @@ const temporalFallbackProvider = temporalOptional
             }),
           },
           terminateWorkflow: async () => false,
-        } as TemporalService,
+        } as unknown as TemporalService,
       },
     ]
   : [];
