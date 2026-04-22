@@ -52,7 +52,7 @@ export const AddEditModal: FC<AddEditModalProps> = (props) => {
     setIsCreateSet(!!props.addEditSets);
   }, []);
 
-  if (!integrations.length) {
+  if (!integrations.length && !(props.allIntegrations?.length ?? 0)) {
     return null;
   }
 

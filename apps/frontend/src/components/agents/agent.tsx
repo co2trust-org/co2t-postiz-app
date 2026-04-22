@@ -11,7 +11,6 @@ import React, {
 } from 'react';
 import clsx from 'clsx';
 import useCookie from 'react-use-cookie';
-import useSWR from 'swr';
 import { orderBy } from 'lodash';
 import { SVGLine } from '@gitroom/frontend/components/launches/launches.component';
 import ImageWithFallback from '@gitroom/react/helpers/image.with.fallback';
@@ -20,9 +19,11 @@ import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
 import { useWaitForClass } from '@gitroom/helpers/utils/use.wait.for.class';
 import { MultiMediaComponent } from '@gitroom/frontend/components/media/media.component';
 import { Integration } from '@prisma/client';
+import { Integrations as SocialIntegrations } from '@gitroom/frontend/components/launches/calendar.context';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
+import useSWR from 'swr';
 
 export const MediaPortal: FC<{
   media: { path: string; id: string }[];
@@ -197,15 +198,36 @@ export const AgentList: FC<{ onChange: (arr: any[]) => void }> = ({
   );
 };
 
-export const PropertiesContext = createContext({ properties: [] });
+export const PropertiesContext = createContext<{
+  properties: SocialIntegrations[];
+  allIntegrations: SocialIntegrations[];
+}>({ properties: [], allIntegrations: [] });
+
 export const Agent: FC<{ children: ReactNode; basePath?: string }> = ({
   children,
   basePath = '/agents',
 }) => {
-  const [properties, setProperties] = useState([]);
+  const [properties, setProperties] = useState<SocialIntegrations[]>([]);
+  const fetch = useFetch();
+  const { data: allIntegrations = [] } = useSWR(
+    'integrations',
+    async () => {
+      return (await (await fetch('/integrations/list')).json())
+        .integrations as SocialIntegrations[];
+    },
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      revalidateIfStale: false,
+      revalidateOnMount: true,
+      refreshWhenHidden: false,
+      refreshWhenOffline: false,
+      fallbackData: [],
+    }
+  );
 
   return (
-    <PropertiesContext.Provider value={{ properties }}>
+    <PropertiesContext.Provider value={{ properties, allIntegrations }}>
       <AgentList onChange={setProperties} />
       <div className="bg-newBgColorInner flex flex-1">{children}</div>
       <Threads basePath={basePath} />

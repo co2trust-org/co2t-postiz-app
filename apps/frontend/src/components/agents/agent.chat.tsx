@@ -41,6 +41,9 @@ import { useT } from '@gitroom/react/translation/get.transation.service.client';
 import useSWR from 'swr';
 import { useAddProviderAndConnect } from '@gitroom/frontend/components/launches/add.provider.component';
 import { BrandBrainPanel } from '@gitroom/frontend/components/agents/brand.brain.panel';
+import { useLaunchStore } from '@gitroom/frontend/components/new-launch/store';
+import { useToaster } from '@gitroom/react/toaster/toaster';
+import { Integrations as SocialIntegrations } from '@gitroom/frontend/components/launches/calendar.context';
 
 const POLL_NOTES_KEY = 'agent.poll.history.notes';
 const POLL_IMAGES_KEY = 'agent.poll.history.images';
@@ -917,11 +920,50 @@ const OpenModal: FC<{
   };
 }> = ({ args, respond }) => {
   const modals = useModals();
-  const { properties } = useContext(PropertiesContext);
+  const toaster = useToaster();
+  const t = useT();
+  const { properties, allIntegrations: allIntegrationsFromContext } =
+    useContext(PropertiesContext);
   const startModal = useCallback(async () => {
+    const accounts: SocialIntegrations[] =
+      allIntegrationsFromContext.length > 0
+        ? allIntegrationsFromContext
+        : properties;
+
+    if (!accounts.length) {
+      toaster.show(
+        t(
+          'agent_post_modal_no_channels',
+          'No connected channels. Connect an account in Launches, then try again.'
+        ),
+        'warning'
+      );
+      respond('User could not open the post editor (no connected channels).');
+      return;
+    }
+
     for (const integration of args.list) {
+      const acct = accounts.find((p) => p.id === integration.integrationId);
+      if (!acct) {
+        toaster.show(
+          t(
+            'agent_post_modal_unknown_channel',
+            'This draft references a channel that was not found. Check connected accounts.'
+          ),
+          'warning'
+        );
+        respond(
+          `User could not open the post (unknown integrationId ${integration.integrationId}).`
+        );
+        return;
+      }
+
       await new Promise((res) => {
         const group = makeId(10);
+        // Fresh launch state + full account list (selected sidebar channels may be empty).
+        useLaunchStore.getState().reset();
+        useLaunchStore.getState().setAllIntegrations(accounts);
+
         modals.openModal({
           id: 'add-edit-modal',
           closeOnClickOutside: false,
@@ -929,6 +971,7 @@ const OpenModal: FC<{
           closeOnEscape: false,
           withCloseButton: false,
           askClose: true,
+          fullScreen: true,
           size: '80%',
           title: ``,
           classNames: {
@@ -939,9 +982,7 @@ const OpenModal: FC<{
               value={{
                 group,
                 integration: integration.integrationId,
-                integrationPicture:
-                  properties.find((p) => p.id === integration.integrationId)
-                    .picture || '',
+                integrationPicture: acct.picture || '',
                 settings: integration.settings || {},
                 posts: integration.posts.map((p) => ({
                   approvedSubmitForOrder: 'NO',
@@ -952,9 +993,7 @@ const OpenModal: FC<{
                   settings: JSON.stringify(integration.settings || {}),
                   group,
                   integrationId: integration.integrationId,
-                  integration: properties.find(
-                    (p) => p.id === integration.integrationId
-                  ),
+                  integration: acct,
                   publishDate: dayjs.utc(integration.date).toISOString(),
                   image: p.attachments.map((a) => ({
                     id: a.id,
@@ -965,10 +1004,8 @@ const OpenModal: FC<{
             >
               <AddEditModal
                 date={dayjs.utc(integration.date)}
-                allIntegrations={properties}
-                integrations={properties.filter(
-                  (p) => p.id === integration.integrationId
-                )}
+                allIntegrations={accounts}
+                integrations={accounts}
                 onlyValues={integration.posts.map((p) => ({
                   content: p.content,
                   id: makeId(10),
@@ -988,14 +1025,18 @@ const OpenModal: FC<{
     }
 
     respond('User scheduled all the posts');
-  }, [args, respond, properties]);
+  }, [
+    args,
+    respond,
+    properties,
+    allIntegrationsFromContext,
+    modals,
+    toaster,
+    t,
+  ]);
 
   useEffect(() => {
     startModal();
-  }, []);
-  return (
-    <div onClick={() => respond('continue')}>
-      Opening manually ${JSON.stringify(args)}
-    </div>
-  );
+  }, [startModal]);
+  return <div className="sr-only" aria-live="polite" />;
 };
