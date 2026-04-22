@@ -9,6 +9,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import clsx from 'clsx';
 import { CopilotChat, CopilotKitCSSProperties } from '@copilotkit/react-ui';
 import {
   InputProps,
