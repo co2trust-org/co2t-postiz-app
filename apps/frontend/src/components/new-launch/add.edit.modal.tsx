@@ -2,7 +2,7 @@
 import 'reflect-metadata';
 import { useLaunchStore } from '@gitroom/frontend/components/new-launch/store';
 import dayjs from 'dayjs';
-import { FC, useEffect } from 'react';
+import { FC, useEffect, useLayoutEffect } from 'react';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
 import { ManageModal } from '@gitroom/frontend/components/new-launch/manage.modal';
 import { Integrations } from '@gitroom/frontend/components/launches/calendar.context';
@@ -45,7 +45,8 @@ export const AddEditModal: FC<AddEditModalProps> = (props) => {
     );
 
   const integrations = useLaunchStore((state) => state.integrations);
-  useEffect(() => {
+  // Layout: run before child effects so the launch store has integrations for edit flows.
+  useLayoutEffect(() => {
     setDummy(!!props.dummy);
     setDate(props.date || newDayjs());
     setAllIntegrations(props.allIntegrations || []);
@@ -61,37 +62,60 @@ export const AddEditModal: FC<AddEditModalProps> = (props) => {
 
 export const AddEditModalInner: FC<AddEditModalProps> = (props) => {
   const existingData = useExistingData();
-  const { addOrRemoveSelectedIntegration, selectedIntegrations, integrations } =
-    useLaunchStore(
-      useShallow((state) => ({
-        integrations: state.integrations,
-        selectedIntegrations: state.selectedIntegrations,
-        addOrRemoveSelectedIntegration: state.addOrRemoveSelectedIntegration,
-      }))
-    );
+  const {
+    addOrRemoveSelectedIntegration,
+    setSelectedIntegrations,
+    selectedIntegrations,
+    integrations,
+  } = useLaunchStore(
+    useShallow((state) => ({
+      integrations: state.integrations,
+      selectedIntegrations: state.selectedIntegrations,
+      addOrRemoveSelectedIntegration: state.addOrRemoveSelectedIntegration,
+      setSelectedIntegrations: state.setSelectedIntegrations,
+    }))
+  );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const integrationList =
+      integrations.length > 0
+        ? integrations
+        : props.integrations.length > 0
+          ? props.integrations
+          : props.allIntegrations ?? [];
+
     if (props?.set?.posts?.length) {
       for (const post of props?.set?.posts) {
         if (post.integration) {
-          const integration = integrations.find(
+          const integration = integrationList.find(
             (i) => i.id === post.integration.id
           );
-          addOrRemoveSelectedIntegration(integration, post.settings);
+          if (integration) {
+            addOrRemoveSelectedIntegration(integration, post.settings);
+          }
         }
       }
     }
 
     if (existingData.integration) {
-      const integration = integrations.find(
+      const integration = integrationList.find(
         (i) => i.id === existingData.integration
       );
-      addOrRemoveSelectedIntegration(integration, existingData.settings);
+      if (integration) {
+        // Must replace selection, not toggle: toggle would remove the channel if it was
+        // already selected from a prior modal, leaving an empty modal (calendar edit).
+        setSelectedIntegrations([
+          {
+            selectedIntegrations: integration,
+            settings: existingData.settings,
+          },
+        ]);
+      }
     }
 
     if (props?.selectedChannels?.length) {
       for (const channel of props.selectedChannels) {
-        const integration = integrations.find((i) => i.id === channel);
+        const integration = integrationList.find((i) => i.id === channel);
         if (integration) {
           addOrRemoveSelectedIntegration(integration, {});
         }
