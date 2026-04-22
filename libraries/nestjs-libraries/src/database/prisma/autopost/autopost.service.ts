@@ -6,7 +6,7 @@ import { END, START, StateGraph } from '@langchain/langgraph';
 import { AutoPost, Integration } from '@prisma/client';
 import { BaseMessage } from '@langchain/core/messages';
 import striptags from 'striptags';
-import { ChatOpenAI, DallEAPIWrapper } from '@langchain/openai';
+import { ChatOpenAI } from '@langchain/openai';
 import { JSDOM } from 'jsdom';
 import { z } from 'zod';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
@@ -19,6 +19,7 @@ import { TypedSearchAttributes } from '@temporalio/common';
 import {
   organizationId,
 } from '@gitroom/nestjs-libraries/temporal/temporal.search.attribute';
+import { generateImage } from '@gitroom/nestjs-libraries/lib/openai/generateImage';
 const parser = new Parser();
 
 interface WorkflowChannelsState {
@@ -39,11 +40,6 @@ const model = new ChatOpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'sk-proj-',
   model: 'gpt-4.1',
   temperature: 0.7,
-});
-
-const dalle = new DallEAPIWrapper({
-  apiKey: process.env.OPENAI_API_KEY || 'sk-proj-',
-  model: 'gpt-image-1',
 });
 
 const generateContent = z.object({
@@ -257,9 +253,9 @@ export class AutopostService {
           content: state.load.description || state.description,
         });
 
-    const image = await dalle.invoke(generatedTextToBeSentToDallE);
+    const { imageUrl } = await generateImage(generatedTextToBeSentToDallE);
 
-    return { ...state, image };
+    return { ...state, image: imageUrl };
   }
 
   async schedulePost(state: WorkflowChannelsState) {

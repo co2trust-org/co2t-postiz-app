@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { shuffle } from 'lodash';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
+import { generateImage as generateImageWithOpenAI } from '@gitroom/nestjs-libraries/lib/openai/generateImage';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'sk-proj-',
@@ -18,17 +19,15 @@ const VoicePrompt = z.object({
 
 @Injectable()
 export class OpenaiService {
+  /**
+   * GPT image model generation only (default gpt-image-1.5 via lib helper).
+   * @param isUrl When true, returns a `data:image/...;base64,...` URL (for flows that skip a base64 prefix).
+   */
   async generateImage(prompt: string, isUrl: boolean, isVertical = false) {
-    const generate = (
-      await openai.images.generate({
-        prompt,
-        response_format: isUrl ? 'url' : 'b64_json',
-        model: 'dall-e-3',
-        ...(isVertical ? { size: '1024x1792' } : {}),
-      })
-    ).data[0];
-
-    return isUrl ? generate.url : generate.b64_json;
+    const result = await generateImageWithOpenAI(prompt, {
+      size: isVertical ? '1024x1536' : '1024x1024',
+    });
+    return isUrl ? result.imageUrl : result.base64;
   }
 
   async generatePromptForPicture(prompt: string) {
