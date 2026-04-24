@@ -40,6 +40,14 @@ export class MediaController {
     return this._mediaService.deleteMedia(org.id, id);
   }
 
+  @Post('/:id/convert-to-jpg')
+  convertMediaToJpg(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    return this._mediaService.convertMediaToJpg(org.id, id);
+  }
+
   @Post('/generate-video')
   generateVideo(
     @GetOrgFromRequest() org: Organization,

@@ -37,6 +37,106 @@ export class MediaRepository {
     });
   }
 
+  getMediaByIdForOrg(org: string, id: string) {
+    return this._media.model.media.findUnique({
+      where: {
+        id,
+        organizationId: org,
+      },
+    });
+  }
+
+  updateMediaFile(
+    org: string,
+    id: string,
+    fileName: string,
+    filePath: string,
+    originalName?: string | null
+  ) {
+    return this._media.model.media.update({
+      where: {
+        id,
+        organizationId: org,
+      },
+      data: {
+        name: fileName,
+        path: filePath,
+        ...(originalName !== undefined ? { originalName } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        originalName: true,
+        path: true,
+        thumbnail: true,
+        alt: true,
+        thumbnailTimestamp: true,
+      },
+    });
+  }
+
+  async updatePostMediaReferences(
+    org: string,
+    mediaId: string,
+    media: {
+      id: string;
+      name: string;
+      originalName: string | null;
+      path: string;
+      thumbnail?: string | null;
+      alt?: string | null;
+      thumbnailTimestamp?: number | null;
+    }
+  ) {
+    const posts = await (this._media.model as any).post.findMany({
+      where: {
+        organizationId: org,
+        deletedAt: null,
+        image: {
+          contains: mediaId,
+        },
+      },
+      select: {
+        id: true,
+        image: true,
+      },
+    });
+
+    await Promise.all(
+      posts.map(async (post: { id: string; image: string | null }) => {
+        let changed = false;
+        const images = JSON.parse(post.image || '[]').map((item: any) => {
+          if (item?.id !== mediaId) {
+            return item;
+          }
+          changed = true;
+          return {
+            ...item,
+            path: media.path,
+            thumbnail: media.thumbnail ?? item.thumbnail ?? null,
+            alt: media.alt ?? item.alt ?? null,
+            thumbnailTimestamp:
+              media.thumbnailTimestamp ?? item.thumbnailTimestamp ?? null,
+          };
+        });
+
+        if (!changed) {
+          return;
+        }
+
+        await (this._media.model as any).post.update({
+          where: {
+            id: post.id,
+            organizationId: org,
+          },
+          data: {
+            image: JSON.stringify(images),
+          },
+        });
+      })
+    );
+  }
+
   deleteMedia(org: string, id: string) {
     return this._media.model.media.update({
       where: {

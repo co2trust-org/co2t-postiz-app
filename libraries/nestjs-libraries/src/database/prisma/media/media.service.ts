@@ -1,4 +1,4 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
 import { MediaRepository } from '@gitroom/nestjs-libraries/database/prisma/media/media.repository';
 import { OpenaiService } from '@gitroom/nestjs-libraries/openai/openai.service';
 import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
@@ -26,6 +26,56 @@ export class MediaService {
 
   async deleteMedia(org: string, id: string) {
     return this._mediaRepository.deleteMedia(org, id);
+  }
+
+  async convertMediaToJpg(org: string, id: string) {
+    const media = await this._mediaRepository.getMediaByIdForOrg(org, id);
+    if (!media || media.deletedAt) {
+      throw new BadRequestException('Media not found');
+    }
+
+    if (media.path.toLowerCase().includes('.mp4')) {
+      throw new BadRequestException('Only image media can be converted to JPG');
+    }
+
+    const response = await fetch(media.path);
+    if (!response.ok) {
+      throw new BadRequestException('Could not fetch media file');
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const uploaded = await this.storage.uploadFile({
+      buffer,
+      mimetype: response.headers.get('content-type') || 'application/octet-stream',
+      size: buffer.length,
+      path: '',
+      fieldname: 'file',
+      destination: '',
+      stream: buffer as any,
+      filename: media.name,
+      originalname: media.originalName || media.name,
+      encoding: '',
+    });
+
+    if (uploaded.mimetype !== 'image/jpeg') {
+      throw new BadRequestException('Only image media can be converted to JPG');
+    }
+
+    const updatedMedia = await this._mediaRepository.updateMediaFile(
+      org,
+      id,
+      uploaded.originalname,
+      uploaded.path,
+      media.originalName
+    );
+
+    await this._mediaRepository.updatePostMediaReferences(
+      org,
+      id,
+      updatedMedia
+    );
+
+    return updatedMedia;
   }
 
   getMediaById(id: string) {

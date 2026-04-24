@@ -1,36 +1,14 @@
 import { IUploadProvider } from './upload.interface';
 import { mkdirSync, unlink, writeFileSync } from 'fs';
-// @ts-ignore
-import mime from 'mime';
-import { extname } from 'path';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { fromBuffer } = require('file-type');
-
-const LOCAL_STORAGE_ALLOWED_MIME = new Set<string>([
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/avif',
-  'image/bmp',
-  'image/tiff',
-  'video/mp4',
-  'audio/mpeg',
-  'audio/mp4',
-  'audio/wav',
-  'audio/ogg',
-]);
+import { normalizeUploadBuffer } from '@gitroom/nestjs-libraries/upload/normalize.upload';
 export class LocalStorage implements IUploadProvider {
   constructor(private uploadDirectory: string) {}
 
   async uploadSimple(path: string) {
     const loadImage = await fetch(path);
-    const contentType =
-      loadImage?.headers?.get('content-type') ||
-      loadImage?.headers?.get('Content-Type');
-    const findExtension = mime.getExtension(contentType) ||
-      path.split('?')[0].split('#')[0].split('.').pop() ||
-      'bin';
+    const normalized = await normalizeUploadBuffer(
+      Buffer.from(await loadImage.arrayBuffer())
+    );
 
     const now = new Date();
     const year = now.getFullYear();
@@ -46,22 +24,19 @@ export class LocalStorage implements IUploadProvider {
       .map(() => Math.round(Math.random() * 16).toString(16))
       .join('');
 
-    const filePath = `${dir}/${randomName}.${findExtension}`;
-    const publicPath = `${innerPath}/${randomName}.${findExtension}`;
+    const filePath = `${dir}/${randomName}.${normalized.ext}`;
+    const publicPath = `${innerPath}/${randomName}.${normalized.ext}`;
     // Logic to save the file to the filesystem goes here
-    writeFileSync(filePath, Buffer.from(await loadImage.arrayBuffer()));
+    writeFileSync(filePath, normalized.buffer);
 
     return process.env.FRONTEND_URL + '/uploads' + publicPath;
   }
 
   async uploadFile(file: Express.Multer.File): Promise<any> {
     try {
-      const detected = await fromBuffer(file.buffer);
-      if (!detected || !LOCAL_STORAGE_ALLOWED_MIME.has(detected.mime)) {
-        throw new Error('Unsupported file type.');
-      }
-      const safeExt = `.${detected.ext}`;
-      const safeMime = detected.mime;
+      const normalized = await normalizeUploadBuffer(file.buffer);
+      const safeExt = `.${normalized.ext}`;
+      const safeMime = normalized.mime;
 
       const now = new Date();
       const year = now.getFullYear();
@@ -80,12 +55,14 @@ export class LocalStorage implements IUploadProvider {
       const filePath = `${dir}/${randomName}${safeExt}`;
       const publicPath = `${innerPath}/${randomName}${safeExt}`;
 
-      writeFileSync(filePath, file.buffer);
+      writeFileSync(filePath, normalized.buffer);
 
       return {
         filename: `${randomName}${safeExt}`,
         path: process.env.FRONTEND_URL + '/uploads' + publicPath,
         mimetype: safeMime,
+        size: normalized.size,
+        buffer: normalized.buffer,
         originalname: `${randomName}${safeExt}`,
       };
     } catch (err) {

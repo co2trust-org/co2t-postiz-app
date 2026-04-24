@@ -1,28 +1,8 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import 'multer';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import mime from 'mime-types';
-// @ts-ignore
-import { getExtension } from 'mime';
 import { IUploadProvider } from './upload.interface';
-import axios from 'axios';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { fromBuffer } = require('file-type');
-
-const ALLOWED_MIME_TYPES = new Set<string>([
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/avif',
-  'image/bmp',
-  'image/tiff',
-  'video/mp4',
-  'audio/mpeg',
-  'audio/mp4',
-  'audio/wav',
-  'audio/ogg',
-]);
+import { normalizeUploadBuffer } from '@gitroom/nestjs-libraries/upload/normalize.upload';
 
 class CloudflareStorage implements IUploadProvider {
   private _client: S3Client;
@@ -76,61 +56,52 @@ class CloudflareStorage implements IUploadProvider {
 
   async uploadSimple(path: string) {
     const loadImage = await fetch(path);
-    const body = Buffer.from(await loadImage.arrayBuffer());
-    const detected = await fromBuffer(body);
-    if (!detected || !ALLOWED_MIME_TYPES.has(detected.mime)) {
-      throw new Error('Unsupported file type.');
-    }
-    const extension = detected.ext;
-    const safeContentType = detected.mime;
+    const normalized = await normalizeUploadBuffer(
+      Buffer.from(await loadImage.arrayBuffer())
+    );
     const id = makeId(10);
 
     const params = {
       Bucket: this._bucketName,
-      Key: `${id}.${extension}`,
-      Body: body,
-      ContentType: safeContentType,
+      Key: `${id}.${normalized.ext}`,
+      Body: normalized.buffer,
+      ContentType: normalized.mime,
       ChecksumMode: 'DISABLED',
     };
 
     const command = new PutObjectCommand({ ...params });
     await this._client.send(command);
 
-    return `${this._uploadUrl}/${id}.${extension}`;
+    return `${this._uploadUrl}/${id}.${normalized.ext}`;
   }
 
   async uploadFile(file: Express.Multer.File): Promise<any> {
     try {
-      const detected = await fromBuffer(file.buffer);
-      if (!detected || !ALLOWED_MIME_TYPES.has(detected.mime)) {
-        throw new Error('Unsupported file type.');
-      }
+      const normalized = await normalizeUploadBuffer(file.buffer);
       const id = makeId(10);
-      const extension = detected.ext;
-      const safeContentType = detected.mime;
 
       // Create the PutObjectCommand to upload the file to Cloudflare R2
       const command = new PutObjectCommand({
         Bucket: this._bucketName,
         ACL: 'public-read',
-        Key: `${id}.${extension}`,
-        Body: file.buffer,
-        ContentType: safeContentType,
+        Key: `${id}.${normalized.ext}`,
+        Body: normalized.buffer,
+        ContentType: normalized.mime,
       });
 
       await this._client.send(command);
 
       return {
-        filename: `${id}.${extension}`,
-        mimetype: file.mimetype,
-        size: file.size,
-        buffer: file.buffer,
-        originalname: `${id}.${extension}`,
+        filename: `${id}.${normalized.ext}`,
+        mimetype: normalized.mime,
+        size: normalized.size,
+        buffer: normalized.buffer,
+        originalname: `${id}.${normalized.ext}`,
         fieldname: 'file',
-        path: `${this._uploadUrl}/${id}.${extension}`,
-        destination: `${this._uploadUrl}/${id}.${extension}`,
+        path: `${this._uploadUrl}/${id}.${normalized.ext}`,
+        destination: `${this._uploadUrl}/${id}.${normalized.ext}`,
         encoding: '7bit',
-        stream: file.buffer as any,
+        stream: normalized.buffer as any,
       };
     } catch (err) {
       console.error('Error uploading file to Cloudflare R2:', err);

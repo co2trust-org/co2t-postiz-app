@@ -230,6 +230,8 @@ export const MediaBox: FC<{
   const uploaderRef = useRef<any>(null);
   const mediaDirectory = useMediaDirectory();
   const [loading, setLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [converting, setConverting] = useState<Record<string, boolean>>({});
 
   const uppy = useUppyUploader({
     allowedFileTypes:
@@ -393,6 +395,49 @@ export const MediaBox: FC<{
     [mutate]
   );
 
+  const convertToJpg = useCallback(
+    (media: Media) => async (e: any) => {
+      e.stopPropagation();
+      if (media.path.indexOf('mp4') > -1) {
+        toaster.show(
+          t('only_images_can_be_converted', 'Only images can be converted.'),
+          'warning'
+        );
+        return;
+      }
+
+      setConverting((current) => ({ ...current, [media.id]: true }));
+      try {
+        const response = await fetch(`/media/${media.id}/convert-to-jpg`, {
+          method: 'POST',
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body?.message || 'Could not convert media');
+        }
+
+        toaster.show(
+          t('media_converted_to_jpg', 'Media converted to JPG.'),
+          'success'
+        );
+        await mutate();
+      } catch (err: any) {
+        toaster.show(
+          err?.message ||
+            t('could_not_convert_media', 'Could not convert media.'),
+          'warning'
+        );
+      } finally {
+        setConverting((current) => {
+          const next = { ...current };
+          delete next[media.id];
+          return next;
+        });
+      }
+    },
+    [mutate, toaster, t]
+  );
+
   const btn = useMemo(() => {
     return (
       <button
@@ -441,6 +486,19 @@ export const MediaBox: FC<{
             multiple={true}
           />
           <div className="flex gap-[8px]">
+            <button
+              type="button"
+              onClick={() =>
+                setViewMode((current) =>
+                  current === 'grid' ? 'list' : 'grid'
+                )
+              }
+              className="cursor-pointer bg-btnSimple changeColor flex h-[44px] px-[14px] justify-center items-center rounded-[8px] text-[13px] font-[600]"
+            >
+              {viewMode === 'grid'
+                ? t('list_view', 'List view')
+                : t('grid_view', 'Grid view')}
+            </button>
             {btn}
             <ThirdPartyMediaLibrary onImported={() => mutate()} />
           </div>
@@ -522,7 +580,101 @@ export const MediaBox: FC<{
                 ))}
               </>
             )}
-            {data?.results
+            {viewMode === 'list' && !!data?.results?.length && (
+              <div className="w-full flex flex-col gap-[8px] px-[3px] py-[3px]">
+                {data?.results
+                  ?.filter((f: any) => {
+                    if (type === 'video') {
+                      return f.path.indexOf('mp4') > -1;
+                    } else if (type === 'image') {
+                      return f.path.indexOf('mp4') === -1;
+                    }
+                    return true;
+                  })
+                  .map((media: any) => {
+                    const selectedIndex = selected.findIndex(
+                      (p: any) => p.id === media.id
+                    );
+                    const isVideo = media.path.indexOf('mp4') > -1;
+                    const isJpg = /\.(jpe?g)(\?|#|$)/i.test(media.path);
+                    return (
+                      <div
+                        key={media.id}
+                        onClick={addRemoveSelected(media)}
+                        className={clsx(
+                          'group flex items-center gap-[12px] rounded-[10px] border p-[10px] bg-newBgColorInner',
+                          !standalone && 'cursor-pointer',
+                          selectedIndex > -1
+                            ? 'border-[#612BD3]'
+                            : 'border-newColColor'
+                        )}
+                      >
+                        <div className="w-[58px] h-[58px] rounded-[8px] overflow-hidden bg-black/20 shrink-0">
+                          {isVideo ? (
+                            <VideoFrame url={mediaDirectory.set(media.path)} />
+                          ) : (
+                            <img
+                              className="w-full h-full object-cover"
+                              src={mediaDirectory.set(media.path)}
+                              alt="media"
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[14px] font-[600] truncate">
+                            {media.originalName || media.name}
+                          </div>
+                          <div className="text-[12px] text-newTextColor/60 truncate">
+                            {media.path}
+                          </div>
+                          <div className="text-[12px] text-newTextColor/60 mt-[2px]">
+                            {isVideo
+                              ? t('video', 'Video')
+                              : isJpg
+                              ? t('jpg_image', 'JPG image')
+                              : t('image_needs_jpg', 'Image can be converted')}
+                          </div>
+                        </div>
+                        {selectedIndex > -1 && (
+                          <div className="text-white flex justify-center items-center text-[13px] font-[600] w-[24px] h-[24px] rounded-full bg-[#612BD3] shrink-0">
+                            {selectedIndex + 1}
+                          </div>
+                        )}
+                        {!isVideo && (
+                          <button
+                            type="button"
+                            disabled={!!converting[media.id]}
+                            onClick={convertToJpg(media)}
+                            className="cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed h-[34px] px-[12px] rounded-[8px] bg-[#612BD3] text-white text-[12px] font-[600] shrink-0"
+                          >
+                            {converting[media.id]
+                              ? t('converting', 'Converting...')
+                              : isJpg
+                              ? t('reconvert_jpg', 'Reconvert JPG')
+                              : t('convert_to_jpg', 'Convert to JPG')}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={maximize(media)}
+                          className="cursor-pointer h-[34px] px-[12px] rounded-[8px] bg-newColColor text-[12px] font-[600] shrink-0"
+                        >
+                          {t('preview', 'Preview')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={deleteImage(media)}
+                          className="cursor-pointer h-[34px] px-[12px] rounded-[8px] bg-red-500/10 text-red-300 text-[12px] font-[600] shrink-0"
+                        >
+                          {t('delete', 'Delete')}
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+            {viewMode === 'grid' &&
+              data?.results
               ?.filter((f: any) => {
                 if (type === 'video') {
                   return f.path.indexOf('mp4') > -1;
