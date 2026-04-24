@@ -28,7 +28,7 @@ export async function normalizeUploadBuffer(buffer: Buffer) {
     const converted = await sharp(buffer)
       .rotate()
       .flatten({ background: '#ffffff' })
-      .jpeg({ quality: 95, mozjpeg: true })
+      .jpeg({ quality: 95, progressive: false })
       .toBuffer();
 
     return {

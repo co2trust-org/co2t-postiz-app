@@ -66,7 +66,7 @@ export class MediaService {
       id,
       uploaded.originalname,
       uploaded.path,
-      media.originalName
+      uploaded.originalname
     );
 
     await this._mediaRepository.updatePostMediaReferences(

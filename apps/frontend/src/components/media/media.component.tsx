@@ -438,6 +438,67 @@ export const MediaBox: FC<{
     [mutate, toaster, t]
   );
 
+  const convertSelectedToJpg = useCallback(async () => {
+    const images = selected.filter(
+      (media: any) => media?.path?.indexOf('mp4') === -1
+    );
+
+    if (!images.length) {
+      toaster.show(
+        t('select_images_to_convert', 'Select one or more images to convert.'),
+        'warning'
+      );
+      return;
+    }
+
+    setConverting((current) => ({
+      ...current,
+      ...Object.fromEntries(images.map((media: any) => [media.id, true])),
+    }));
+
+    try {
+      const converted = await Promise.all(
+        images.map(async (media: any) => {
+          const response = await fetch(`/media/${media.id}/convert-to-jpg`, {
+            method: 'POST',
+          });
+          if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body?.message || 'Could not convert media');
+          }
+          return response.json();
+        })
+      );
+
+      const convertedById = new Map(
+        converted.map((media: any) => [media.id, media])
+      );
+      setSelected((current: any[]) =>
+        current.map((media: any) => convertedById.get(media.id) || media)
+      );
+
+      toaster.show(
+        t('selected_media_converted_to_jpg', 'Selected media converted to JPG.'),
+        'success'
+      );
+      await mutate();
+    } catch (err: any) {
+      toaster.show(
+        err?.message ||
+          t('could_not_convert_media', 'Could not convert media.'),
+        'warning'
+      );
+    } finally {
+      setConverting((current) => {
+        const next = { ...current };
+        for (const media of images as any[]) {
+          delete next[media.id];
+        }
+        return next;
+      });
+    }
+  }, [selected, mutate, toaster, t]);
+
   const btn = useMemo(() => {
     return (
       <button
@@ -486,6 +547,15 @@ export const MediaBox: FC<{
             multiple={true}
           />
           <div className="flex gap-[8px]">
+            {selected.some((media: any) => media?.path?.indexOf('mp4') === -1) && (
+              <button
+                type="button"
+                onClick={convertSelectedToJpg}
+                className="cursor-pointer bg-[#612BD3] text-white flex h-[44px] px-[14px] justify-center items-center rounded-[8px] text-[13px] font-[600]"
+              >
+                {t('convert_selected_to_jpg', 'Convert selected to JPG')}
+              </button>
+            )}
             <button
               type="button"
               onClick={() =>
@@ -622,7 +692,7 @@ export const MediaBox: FC<{
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="text-[14px] font-[600] truncate">
-                            {media.originalName || media.name}
+                            {media.name || media.originalName}
                           </div>
                           <div className="text-[12px] text-newTextColor/60 truncate">
                             {media.path}
@@ -710,7 +780,9 @@ export const MediaBox: FC<{
                         onClick={deleteImage(media)}
                       />
                     )}
-                    <div className="absolute bottom-[10px] end-[10px] z-[100]">{media.originalName}</div>
+                    <div className="absolute bottom-[10px] end-[10px] z-[100]">
+                      {media.name || media.originalName}
+                    </div>
                     <div className="w-full h-full rounded-[6px] overflow-hidden relative">
                       <div className="absolute z-[20] left-[50%] top-[50%] -translate-x-[50%] -translate-y-[50%]">
                         <div
