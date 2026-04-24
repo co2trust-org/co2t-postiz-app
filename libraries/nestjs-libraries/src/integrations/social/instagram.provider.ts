@@ -34,6 +34,7 @@ export class InstagramProvider
     'instagram_manage_insights',
   ];
   override maxConcurrentJob = 400;
+  convertToJPEG = true;
   editor = 'normal' as const;
   dto = InstagramDto;
   maxLength() {
