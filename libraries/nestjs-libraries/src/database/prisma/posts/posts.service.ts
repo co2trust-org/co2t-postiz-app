@@ -4,6 +4,8 @@ import {
   NotFoundException,
   ValidationPipe,
 } from '@nestjs/common';
+import { getPublicPortalBySlug } from '@gitroom/nestjs-libraries/config/public.portal.config';
+import { GetPublicPortalPostsDto } from '@gitroom/nestjs-libraries/dtos/posts/get.public.portal.posts.dto';
 import { PostsRepository } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.repository';
 import { CreatePostDto } from '@gitroom/nestjs-libraries/dtos/posts/create.post.dto';
 import { PatchPostDto } from '@gitroom/nestjs-libraries/dtos/posts/patch.post.dto';
@@ -346,6 +348,57 @@ export class PostsService {
     return minifyPostsList(
       await this._postRepository.getPostsList(orgId, query)
     );
+  }
+
+  async getPublicPortalFeed(slug: string, query: GetPublicPortalPostsDto) {
+    const cfg = getPublicPortalBySlug(slug);
+    if (!cfg) {
+      throw new NotFoundException();
+    }
+    const page = query.page ?? 0;
+    const limit = query.limit ?? 20;
+    const tagNames = (cfg.tags ?? [])
+      .map((t) => String(t).trim())
+      .filter(Boolean);
+    const skip = page * limit;
+    const [posts, total] = await Promise.all([
+      this._postRepository.getPublicPortalPosts(cfg.organizationId, {
+        tagNames,
+        skip,
+        take: limit,
+      }),
+      this._postRepository.countPublicPortalPosts(cfg.organizationId, {
+        tagNames,
+      }),
+    ]);
+    return {
+      slug,
+      title: cfg.title ?? slug,
+      tags: tagNames,
+      page,
+      limit,
+      total,
+      posts: posts.map((p) => ({
+        id: p.id,
+        content: p.content,
+        image: p.image,
+        publishDate: p.publishDate,
+        releaseURL: p.releaseURL,
+        integration: p.integration
+          ? {
+              name: p.integration.name,
+              picture: p.integration.picture,
+              providerIdentifier: p.integration.providerIdentifier,
+              profile: p.integration.profile,
+            }
+          : null,
+        tags: (p.tags ?? []).map((tp) => ({
+          id: tp.tag.id,
+          name: tp.tag.name,
+          color: tp.tag.color,
+        })),
+      })),
+    };
   }
 
   async updateMedia(id: string, imagesList: any[], convertToJPEG = false) {

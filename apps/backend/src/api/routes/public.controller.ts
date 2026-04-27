@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  NotFoundException,
   Param,
   Post,
   Query,
@@ -27,6 +28,7 @@ import { Readable, pipeline } from 'stream';
 import { promisify } from 'util';
 import { OnlyURL } from '@gitroom/nestjs-libraries/dtos/webhooks/webhooks.dto';
 import { isSafePublicHttpsUrl } from '@gitroom/nestjs-libraries/dtos/webhooks/webhook.url.validator';
+import { GetPublicPortalPostsDto } from '@gitroom/nestjs-libraries/dtos/posts/get.public.portal.posts.dto';
 
 const pump = promisify(pipeline);
 
@@ -50,6 +52,17 @@ export class PublicController {
       return;
     }
     return this._agentGraphInsertService.newPost(body.text);
+  }
+
+  @Get('/portal/:slug')
+  async getPublicPortalFeed(
+    @Param('slug') slug: string,
+    @Query() query: GetPublicPortalPostsDto
+  ) {
+    if (!/^[a-z0-9_-]+$/i.test(slug)) {
+      throw new NotFoundException();
+    }
+    return this._postsService.getPublicPortalFeed(slug, query);
   }
 
   @Get(`/posts/:id`)

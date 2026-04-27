@@ -359,6 +359,83 @@ export class PostsRepository {
     };
   }
 
+  private publicPortalWhere(
+    orgId: string,
+    tagNames: string[]
+  ): Prisma.PostWhereInput {
+    const base: Prisma.PostWhereInput = {
+      organizationId: orgId,
+      state: 'PUBLISHED',
+      deletedAt: null,
+      parentPostId: null,
+      integration: {
+        deletedAt: null,
+      },
+    };
+    if (!tagNames.length) {
+      return base;
+    }
+    return {
+      ...base,
+      AND: tagNames.map((name) => ({
+        tags: {
+          some: {
+            tag: {
+              orgId,
+              deletedAt: null,
+              name: { equals: name, mode: 'insensitive' },
+            },
+          },
+        },
+      })),
+    };
+  }
+
+  getPublicPortalPosts(
+    orgId: string,
+    params: { tagNames: string[]; skip: number; take: number }
+  ) {
+    const where = this.publicPortalWhere(orgId, params.tagNames);
+    return this._post.model.post.findMany({
+      where,
+      skip: params.skip,
+      take: params.take,
+      orderBy: { publishDate: 'desc' },
+      select: {
+        id: true,
+        content: true,
+        image: true,
+        publishDate: true,
+        releaseURL: true,
+        tags: {
+          select: {
+            tag: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+              },
+            },
+          },
+        },
+        integration: {
+          select: {
+            name: true,
+            picture: true,
+            providerIdentifier: true,
+            profile: true,
+          },
+        },
+      },
+    });
+  }
+
+  countPublicPortalPosts(orgId: string, params: { tagNames: string[] }) {
+    return this._post.model.post.count({
+      where: this.publicPortalWhere(orgId, params.tagNames),
+    });
+  }
+
   findIdempotencyRow(
     organizationId: string,
     idempotencyKey: string,
