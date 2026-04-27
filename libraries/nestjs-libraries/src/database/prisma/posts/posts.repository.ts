@@ -361,41 +361,66 @@ export class PostsRepository {
 
   private publicPortalWhere(
     orgId: string,
-    tagNames: string[]
+    tagNames: string[],
+    draftChannelIds: string[]
   ): Prisma.PostWhereInput {
-    const base: Prisma.PostWhereInput = {
+    const tagAnd: Prisma.PostWhereInput[] =
+      tagNames.length > 0
+        ? tagNames.map((name) => ({
+            tags: {
+              some: {
+                tag: {
+                  orgId,
+                  deletedAt: null,
+                  name: { equals: name, mode: 'insensitive' },
+                },
+              },
+            },
+          }))
+        : [];
+
+    const shared: Prisma.PostWhereInput = {
       organizationId: orgId,
-      state: 'PUBLISHED',
       deletedAt: null,
       parentPostId: null,
       integration: {
         deletedAt: null,
       },
+      ...(tagAnd.length ? { AND: tagAnd } : {}),
     };
-    if (!tagNames.length) {
-      return base;
+
+    const published: Prisma.PostWhereInput = {
+      ...shared,
+      state: 'PUBLISHED',
+    };
+
+    if (!draftChannelIds.length) {
+      return published;
     }
-    return {
-      ...base,
-      AND: tagNames.map((name) => ({
-        tags: {
-          some: {
-            tag: {
-              orgId,
-              deletedAt: null,
-              name: { equals: name, mode: 'insensitive' },
-            },
-          },
-        },
-      })),
+
+    const draft: Prisma.PostWhereInput = {
+      ...shared,
+      state: 'DRAFT',
+      integrationId: { in: draftChannelIds },
     };
+
+    return { OR: [published, draft] };
   }
 
   getPublicPortalPosts(
     orgId: string,
-    params: { tagNames: string[]; skip: number; take: number }
+    params: {
+      tagNames: string[];
+      draftChannelIds: string[];
+      skip: number;
+      take: number;
+    }
   ) {
-    const where = this.publicPortalWhere(orgId, params.tagNames);
+    const where = this.publicPortalWhere(
+      orgId,
+      params.tagNames,
+      params.draftChannelIds
+    );
     return this._post.model.post.findMany({
       where,
       skip: params.skip,
@@ -403,6 +428,7 @@ export class PostsRepository {
       orderBy: { publishDate: 'desc' },
       select: {
         id: true,
+        state: true,
         content: true,
         image: true,
         publishDate: true,
@@ -430,9 +456,16 @@ export class PostsRepository {
     });
   }
 
-  countPublicPortalPosts(orgId: string, params: { tagNames: string[] }) {
+  countPublicPortalPosts(
+    orgId: string,
+    params: { tagNames: string[]; draftChannelIds: string[] }
+  ) {
     return this._post.model.post.count({
-      where: this.publicPortalWhere(orgId, params.tagNames),
+      where: this.publicPortalWhere(
+        orgId,
+        params.tagNames,
+        params.draftChannelIds
+      ),
     });
   }
 

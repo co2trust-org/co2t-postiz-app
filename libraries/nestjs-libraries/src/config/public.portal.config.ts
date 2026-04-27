@@ -2,6 +2,12 @@ export type PublicPortalSlugConfig = {
   organizationId: string;
   tags?: string[];
   title?: string;
+  /**
+   * Post integration IDs (cuid) for “website-only” / junk channels.
+   * DRAFT posts on these integrations are listed on the public portal (same tag rules as published).
+   * PUBLISHED posts are unchanged.
+   */
+  draftChannelIds?: string[];
 };
 
 let cached: Record<string, PublicPortalSlugConfig> | null = null;
@@ -35,10 +41,17 @@ function loadMap(): Record<string, PublicPortalSlugConfig> {
           .map((t) => (typeof t === 'string' ? t.trim() : ''))
           .filter(Boolean);
       }
+      let draftChannelIds: string[] | undefined;
+      if (Array.isArray(v.draftChannelIds)) {
+        draftChannelIds = v.draftChannelIds
+          .map((t) => (typeof t === 'string' ? t.trim() : ''))
+          .filter(Boolean);
+      }
       out[slug.trim()] = {
         organizationId,
         ...(tags?.length ? { tags } : {}),
         ...(title ? { title } : {}),
+        ...(draftChannelIds?.length ? { draftChannelIds } : {}),
       };
     }
     cached = out;

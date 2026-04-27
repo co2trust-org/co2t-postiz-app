@@ -360,26 +360,33 @@ export class PostsService {
     const tagNames = (cfg.tags ?? [])
       .map((t) => String(t).trim())
       .filter(Boolean);
+    const draftChannelIds = (cfg.draftChannelIds ?? [])
+      .map((id) => String(id).trim())
+      .filter(Boolean);
     const skip = page * limit;
     const [posts, total] = await Promise.all([
       this._postRepository.getPublicPortalPosts(cfg.organizationId, {
         tagNames,
+        draftChannelIds,
         skip,
         take: limit,
       }),
       this._postRepository.countPublicPortalPosts(cfg.organizationId, {
         tagNames,
+        draftChannelIds,
       }),
     ]);
     return {
       slug,
       title: cfg.title ?? slug,
       tags: tagNames,
+      showDraftsFromChannels: draftChannelIds.length > 0,
       page,
       limit,
       total,
       posts: posts.map((p) => ({
         id: p.id,
+        state: p.state,
         content: p.content,
         image: p.image,
         publishDate: p.publishDate,

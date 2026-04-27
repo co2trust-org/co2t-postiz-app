@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic';
 
 type PortalPost = {
   id: string;
+  state: string;
   content: string | null;
   image: string | null;
   publishDate: string;
@@ -31,6 +32,7 @@ type PortalFeedResponse = {
   slug: string;
   title: string;
   tags: string[];
+  showDraftsFromChannels?: boolean;
   page: number;
   limit: number;
   total: number;
@@ -61,9 +63,12 @@ export async function generateMetadata(props: {
   }
   return {
     title: `${data.title} — ${base}`,
-    description: data.tags.length
-      ? `Published posts tagged: ${data.tags.join(', ')}`
-      : 'Published posts',
+    description:
+      data.tags.length > 0
+        ? `Posts tagged: ${data.tags.join(', ')}`
+        : data.showDraftsFromChannels
+          ? 'Published and website-only draft posts'
+          : 'Published posts',
   };
 }
 
@@ -99,7 +104,13 @@ export default async function PortalPage(props: {
           </p>
         )}
         <p className="text-xs text-gray-500 mt-3">
-          {t('showing_published_only', 'Showing published posts only')}.
+          {data.showDraftsFromChannels
+            ? t(
+                'showing_published_and_site_drafts',
+                'Showing published posts and drafts saved to your website-only channel(s).'
+              )
+            : t('showing_published_only', 'Showing published posts only')}
+          .
         </p>
       </header>
 
@@ -107,7 +118,9 @@ export default async function PortalPage(props: {
         <div className="text-center text-gray-400 py-16 text-[15px]">
           {t(
             'public_portal_empty',
-            'No published posts yet for this portal.'
+            data.showDraftsFromChannels
+              ? 'No posts match this portal yet.'
+              : 'No published posts yet for this portal.'
           )}
         </div>
       ) : (
@@ -149,6 +162,17 @@ export default async function PortalPage(props: {
                     <span className="text-gray-500 text-xs ml-auto">
                       {dayjs.utc(post.publishDate).local().format('MMM D, YYYY h:mm A')}
                     </span>
+                    {post.state === 'DRAFT' && (
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md bg-amber-950/80 text-amber-100 border border-amber-800/60"
+                        title={t(
+                          'site_draft_badge_hint',
+                          'Draft on a website-only channel; not sent to social platforms.'
+                        )}
+                      >
+                        {t('site_draft_badge', 'Site only')}
+                      </span>
+                    )}
                   </div>
                   {post.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
