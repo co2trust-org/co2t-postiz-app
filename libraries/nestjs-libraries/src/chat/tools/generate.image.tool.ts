@@ -5,6 +5,7 @@ import { Injectable } from '@nestjs/common';
 import { MediaService } from '@gitroom/nestjs-libraries/database/prisma/media/media.service';
 import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
 import { checkAuth } from '@gitroom/nestjs-libraries/chat/auth.context';
+import { MediaTier } from '@prisma/client';
 
 @Injectable()
 export class GenerateImageTool implements AgentToolInterface {
@@ -48,7 +49,13 @@ export class GenerateImageTool implements AgentToolInterface {
           'data:image/png;base64,' + image
         );
 
-        return this._mediaService.saveFile(org.id, file.split('/').pop(), file);
+        return this._mediaService.saveFile(
+          org.id,
+          file.split('/').pop(),
+          file,
+          undefined,
+          { mediaTier: MediaTier.AI_SOURCE }
+        );
       },
     });
   }

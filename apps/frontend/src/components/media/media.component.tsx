@@ -199,6 +199,44 @@ export const showMediaBox = (
 };
 const CHUNK_SIZE = 1024 * 1024;
 const MAX_UPLOAD_SIZE = 1024 * 1024 * 1024; // 1 GB
+type MediaTierValue = 'PHOTO_SOURCE' | 'AI_SOURCE' | 'READY_FOR_PUBLIC';
+type MediaApprovalStatusValue = 'PENDING' | 'APPROVED' | 'REJECTED';
+type MediaWithWorkflow = Media & {
+  mediaTier?: MediaTierValue;
+  approvalStatus?: MediaApprovalStatusValue;
+  approvedAt?: string | null;
+  approvedByUserId?: string | null;
+  approvalNote?: string | null;
+};
+const READY_FOR_PUBLIC: MediaTierValue = 'READY_FOR_PUBLIC';
+const PHOTO_SOURCE: MediaTierValue = 'PHOTO_SOURCE';
+const AI_SOURCE: MediaTierValue = 'AI_SOURCE';
+const MEDIA_TIER_OPTIONS: Array<{
+  value: MediaTierValue;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: READY_FOR_PUBLIC,
+    label: 'Ready for Public',
+    description: 'Approved assets for publishing',
+  },
+  {
+    value: PHOTO_SOURCE,
+    label: 'Photo Sources',
+    description: 'Uploaded source photos',
+  },
+  {
+    value: AI_SOURCE,
+    label: 'AI Sources',
+    description: 'AI-generated images',
+  },
+];
+const MEDIA_STATUS_LABELS: Record<MediaApprovalStatusValue, string> = {
+  PENDING: 'Pending review',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
+};
 export const MediaBox: FC<{
   setMedia: (params: { id: string; path: string }[]) => void;
   standalone?: boolean;
@@ -211,18 +249,38 @@ export const MediaBox: FC<{
   const fetch = useFetch();
   const modals = useModals();
   const toaster = useToaster();
+  const user = useUser();
+  const canReviewMedia = ['ADMIN', 'SUPERADMIN'].includes(user?.role || '');
+  const availableTiers = useMemo(
+    () =>
+      canReviewMedia
+        ? MEDIA_TIER_OPTIONS
+        : MEDIA_TIER_OPTIONS.filter((tier) => tier.value === READY_FOR_PUBLIC),
+    [canReviewMedia]
+  );
+  const [activeTier, setActiveTier] =
+    useState<MediaTierValue>(READY_FOR_PUBLIC);
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearch]);
+  }, [debouncedSearch, activeTier]);
+  useEffect(() => {
+    if (!availableTiers.some((tier) => tier.value === activeTier)) {
+      setActiveTier(READY_FOR_PUBLIC);
+    }
+  }, [activeTier, availableTiers]);
   const loadMedia = useCallback(async () => {
     const params = new URLSearchParams({ page: String(page + 1) });
+    params.set('mediaTier', activeTier);
+    if (activeTier === READY_FOR_PUBLIC) {
+      params.set('approvalStatus', 'APPROVED');
+    }
     if (debouncedSearch.trim()) {
       params.set('search', debouncedSearch.trim());
     }
     return (await fetch(`/media?${params.toString()}`)).json();
-  }, [page, debouncedSearch]);
+  }, [page, debouncedSearch, activeTier]);
   const { data, mutate, isLoading } = useSWR(
-    `get-media-${page}-${debouncedSearch}`,
+    `get-media-${page}-${debouncedSearch}-${activeTier}`,
     loadMedia
   );
   const [selected, setSelected] = useState([]);
@@ -240,8 +298,18 @@ export const MediaBox: FC<{
         : type == 'video'
         ? 'video/mp4'
         : 'image/*,video/mp4',
+    mediaTier: PHOTO_SOURCE,
     onUploadSuccess: async (arr) => {
       await mutate();
+      if (activeTier !== PHOTO_SOURCE) {
+        toaster.show(
+          t(
+            'uploaded_to_photo_sources',
+            'Uploaded media was added to Photo Sources for review.'
+          ),
+          'success'
+        );
+      }
       if (standalone) {
         return;
       }
@@ -499,6 +567,57 @@ export const MediaBox: FC<{
     }
   }, [selected, mutate, toaster, t]);
 
+  const reviewMedia = useCallback(
+    (media: MediaWithWorkflow, approvalStatus: MediaApprovalStatusValue) =>
+      async (e: any) => {
+        e.stopPropagation();
+        const response = await fetch(`/media/${media.id}/approval`, {
+          method: 'POST',
+          body: JSON.stringify({ approvalStatus }),
+        });
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          toaster.show(
+            body?.message || t('could_not_update_media', 'Could not update media.'),
+            'warning'
+          );
+          return;
+        }
+
+        toaster.show(
+          approvalStatus === 'APPROVED'
+            ? t('media_approved', 'Media approved for public use.')
+            : t('media_rejected', 'Media rejected.'),
+          'success'
+        );
+        await mutate();
+      },
+    [fetch, mutate, toaster, t]
+  );
+
+  const renderStatusBadge = useCallback(
+    (media: MediaWithWorkflow) => {
+      const status = media.approvalStatus || 'PENDING';
+      return (
+        <span
+          className={clsx(
+            'inline-flex h-[24px] items-center rounded-full px-[9px] text-[11px] font-[600]',
+            status === 'APPROVED' && 'bg-green-500/10 text-green-300',
+            status === 'REJECTED' && 'bg-red-500/10 text-red-300',
+            status === 'PENDING' && 'bg-yellow-500/10 text-yellow-200'
+          )}
+        >
+          {t(
+            `media_status_${status.toLowerCase()}`,
+            MEDIA_STATUS_LABELS[status]
+          )}
+        </span>
+      );
+    },
+    [t]
+  );
+
   const btn = useMemo(() => {
     return (
       <button
@@ -521,6 +640,33 @@ export const MediaBox: FC<{
   return (
     <DropFiles disabled={loading} className="flex flex-col flex-1" onDrop={dragAndDrop}>
       <div className="flex flex-col flex-1">
+        {availableTiers.length > 1 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-[10px] mb-[12px]">
+            {availableTiers.map((tier) => (
+              <button
+                key={tier.value}
+                type="button"
+                onClick={() => setActiveTier(tier.value)}
+                className={clsx(
+                  'text-left rounded-[12px] border px-[14px] py-[12px] transition-colors',
+                  activeTier === tier.value
+                    ? 'border-[#612BD3] bg-[#612BD3]/10 text-white'
+                    : 'border-newColColor bg-newBgColorInner text-newTextColor hover:text-white'
+                )}
+              >
+                <div className="text-[14px] font-[700]">
+                  {t(`media_tier_${tier.value.toLowerCase()}`, tier.label)}
+                </div>
+                <div className="text-[12px] text-newTextColor/60 mt-[4px]">
+                  {t(
+                    `media_tier_${tier.value.toLowerCase()}_description`,
+                    tier.description
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
         <div
           className={clsx(
             'flex items-center gap-[12px]',
@@ -704,6 +850,9 @@ export const MediaBox: FC<{
                               ? t('jpg_image', 'JPG image')
                               : t('image_needs_jpg', 'Image can be converted')}
                           </div>
+                          <div className="mt-[6px]">
+                            {renderStatusBadge(media)}
+                          </div>
                         </div>
                         {selectedIndex > -1 && (
                           <div className="text-white flex justify-center items-center text-[13px] font-[600] w-[24px] h-[24px] rounded-full bg-[#612BD3] shrink-0">
@@ -731,6 +880,28 @@ export const MediaBox: FC<{
                         >
                           {t('preview', 'Preview')}
                         </button>
+                        {standalone && canReviewMedia && (
+                          <>
+                            {media.approvalStatus !== 'APPROVED' && (
+                              <button
+                                type="button"
+                                onClick={reviewMedia(media, 'APPROVED')}
+                                className="cursor-pointer h-[34px] px-[12px] rounded-[8px] bg-green-500/10 text-green-300 text-[12px] font-[600] shrink-0"
+                              >
+                                {t('approve', 'Approve')}
+                              </button>
+                            )}
+                            {media.approvalStatus !== 'REJECTED' && (
+                              <button
+                                type="button"
+                                onClick={reviewMedia(media, 'REJECTED')}
+                                className="cursor-pointer h-[34px] px-[12px] rounded-[8px] bg-yellow-500/10 text-yellow-200 text-[12px] font-[600] shrink-0"
+                              >
+                                {t('reject', 'Reject')}
+                              </button>
+                            )}
+                          </>
+                        )}
                         <button
                           type="button"
                           onClick={deleteImage(media)}
@@ -770,6 +941,9 @@ export const MediaBox: FC<{
                     )}
                     onClick={addRemoveSelected(media)}
                   >
+                    <div className="absolute top-[8px] left-[8px] z-[100]">
+                      {renderStatusBadge(media)}
+                    </div>
                     {!!selected.find((p: any) => p.id === media.id) ? (
                       <div className="text-white flex z-[101] justify-center items-center text-[14px] font-[500] w-[24px] h-[24px] rounded-full bg-[#612BD3] absolute -bottom-[10px] -end-[10px]">
                         {selected.findIndex((z: any) => z.id === media.id) + 1}
@@ -779,6 +953,28 @@ export const MediaBox: FC<{
                         className="cursor-pointer hidden z-[100] group-hover:block absolute -top-[5px] -end-[5px]"
                         onClick={deleteImage(media)}
                       />
+                    )}
+                    {standalone && canReviewMedia && (
+                      <div className="absolute left-[8px] bottom-[8px] z-[100] hidden group-hover:flex gap-[6px]">
+                        {media.approvalStatus !== 'APPROVED' && (
+                          <button
+                            type="button"
+                            onClick={reviewMedia(media, 'APPROVED')}
+                            className="cursor-pointer h-[30px] px-[10px] rounded-[7px] bg-green-500/20 text-green-200 text-[11px] font-[700]"
+                          >
+                            {t('approve', 'Approve')}
+                          </button>
+                        )}
+                        {media.approvalStatus !== 'REJECTED' && (
+                          <button
+                            type="button"
+                            onClick={reviewMedia(media, 'REJECTED')}
+                            className="cursor-pointer h-[30px] px-[10px] rounded-[7px] bg-yellow-500/20 text-yellow-100 text-[11px] font-[700]"
+                          >
+                            {t('reject', 'Reject')}
+                          </button>
+                        )}
+                      </div>
                     )}
                     <div className="absolute bottom-[10px] end-[10px] z-[100]">
                       {media.name || media.originalName}

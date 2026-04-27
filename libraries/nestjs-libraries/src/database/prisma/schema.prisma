@@ -218,6 +218,11 @@ model Media {
   originalName       String?
   path               String
   organizationId     String
+  mediaTier          MediaTier           @default(PHOTO_SOURCE)
+  approvalStatus     MediaApprovalStatus @default(PENDING)
+  approvedAt         DateTime?
+  approvedByUserId   String?
+  approvalNote       String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
@@ -233,6 +238,9 @@ model Media {
 
   @@index([name])
   @@index([organizationId])
+  @@index([organizationId, mediaTier])
+  @@index([organizationId, approvalStatus])
+  @@index([organizationId, mediaTier, approvalStatus])
   @@index([type])
 }
 
@@ -1053,6 +1061,18 @@ enum Role {
   SUPERADMIN
   ADMIN
   USER
+}
+
+enum MediaTier {
+  PHOTO_SOURCE
+  AI_SOURCE
+  READY_FOR_PUBLIC
+}
+
+enum MediaApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum APPROVED_SUBMIT_FOR_ORDER {

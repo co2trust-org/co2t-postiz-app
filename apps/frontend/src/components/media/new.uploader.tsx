@@ -41,12 +41,13 @@ export function useUppyUploader(props: {
   onStart: () => void;
   onEnd: () => void;
   allowedFileTypes: string;
+  mediaTier?: string;
 }) {
   const setLocked = useLaunchStore((state) => state.setLocked);
   const toast = useToaster();
   const { storageProvider, backendUrl, disableImageCompression, transloadit } =
     useVariables();
-  const { onUploadSuccess, allowedFileTypes } = props;
+  const { onUploadSuccess, allowedFileTypes, mediaTier } = props;
   const fetch = useFetch();
   return useMemo(() => {
     // Track file order to maintain original sequence after upload
@@ -189,6 +190,7 @@ export function useUppyUploader(props: {
       uppy2.setFileMeta(file.id, {
         useCloudflare: storageProvider === 'cloudflare' ? 'true' : 'false', // Example of adding a custom field
         addedOrder: fileOrderIndex++, // Track original order for sorting after upload
+        ...(mediaTier ? { mediaTier } : {}),
         // Add more fields as needed
       });
     });
@@ -246,6 +248,7 @@ export function useUppyUploader(props: {
                   body: JSON.stringify({
                     name,
                     originalName,
+                    mediaTier,
                   }),
                 })
               ).json(),

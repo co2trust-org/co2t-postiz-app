@@ -16,6 +16,7 @@ import { MediaService } from '@gitroom/nestjs-libraries/database/prisma/media/me
 import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
 import { GeneratorDto } from '@gitroom/nestjs-libraries/dtos/generator/generator.dto';
 import { generateImage } from '@gitroom/nestjs-libraries/lib/openai/generateImage';
+import { MediaTier } from '@prisma/client';
 
 const tools = !process.env.TAVILY_API_KEY
   ? []
@@ -338,7 +339,9 @@ export class AgentGraphService {
           const uploadWithId = await this._mediaService.saveFile(
             state.orgId,
             name,
-            upload
+            upload,
+            undefined,
+            { mediaTier: MediaTier.AI_SOURCE }
           );
 
           return {

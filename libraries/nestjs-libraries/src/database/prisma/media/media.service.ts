@@ -2,7 +2,7 @@ import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
 import { MediaRepository } from '@gitroom/nestjs-libraries/database/prisma/media/media.repository';
 import { OpenaiService } from '@gitroom/nestjs-libraries/openai/openai.service';
 import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
-import { Organization } from '@prisma/client';
+import { MediaApprovalStatus, MediaTier, Organization } from '@prisma/client';
 import { SaveMediaInformationDto } from '@gitroom/nestjs-libraries/dtos/media/save.media.information.dto';
 import { VideoManager } from '@gitroom/nestjs-libraries/videos/video.manager';
 import { VideoDto } from '@gitroom/nestjs-libraries/dtos/videos/video.dto';
@@ -102,16 +102,84 @@ export class MediaService {
     return generating;
   }
 
-  saveFile(org: string, fileName: string, filePath: string, originalName?: string) {
-    return this._mediaRepository.saveFile(org, fileName, filePath, originalName);
+  saveFile(
+    org: string,
+    fileName: string,
+    filePath: string,
+    originalName?: string,
+    options?: {
+      mediaTier?: MediaTier;
+      approvalStatus?: MediaApprovalStatus;
+    }
+  ) {
+    if (
+      options?.mediaTier &&
+      !Object.values(MediaTier).includes(options.mediaTier)
+    ) {
+      throw new BadRequestException('Invalid media tier');
+    }
+
+    if (
+      options?.approvalStatus &&
+      !Object.values(MediaApprovalStatus).includes(options.approvalStatus)
+    ) {
+      throw new BadRequestException('Invalid media approval status');
+    }
+
+    return this._mediaRepository.saveFile(
+      org,
+      fileName,
+      filePath,
+      originalName,
+      options
+    );
   }
 
-  getMedia(org: string, page: number, search?: string) {
-    return this._mediaRepository.getMedia(org, page, search);
+  getMedia(
+    org: string,
+    page: number,
+    search?: string,
+    mediaTier?: MediaTier,
+    approvalStatus?: MediaApprovalStatus
+  ) {
+    if (mediaTier && !Object.values(MediaTier).includes(mediaTier)) {
+      throw new BadRequestException('Invalid media tier');
+    }
+
+    if (
+      approvalStatus &&
+      !Object.values(MediaApprovalStatus).includes(approvalStatus)
+    ) {
+      throw new BadRequestException('Invalid media approval status');
+    }
+
+    return this._mediaRepository.getMedia(
+      org,
+      page,
+      search,
+      mediaTier,
+      approvalStatus
+    );
   }
 
   saveMediaInformation(org: string, data: SaveMediaInformationDto) {
     return this._mediaRepository.saveMediaInformation(org, data);
+  }
+
+  reviewMedia(
+    org: string,
+    id: string,
+    approvalStatus: MediaApprovalStatus,
+    userId: string,
+    approvalNote?: string
+  ) {
+    return this._mediaRepository.reviewMedia(
+      org,
+      id,
+      approvalStatus,
+      userId,
+      approvalNote
+    );
   }
 
   getVideoOptions() {
@@ -167,7 +235,9 @@ export class MediaService {
         );
 
         const file = await this.storage.uploadSimple(loadedData);
-        return this.saveFile(org.id, file.split('/').pop(), file);
+        return this.saveFile(org.id, file.split('/').pop(), file, undefined, {
+          mediaTier: MediaTier.AI_SOURCE,
+        });
       }
     );
   }

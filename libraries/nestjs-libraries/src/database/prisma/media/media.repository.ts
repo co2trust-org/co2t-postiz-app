@@ -1,12 +1,22 @@
 import { PrismaRepository } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 import { SaveMediaInformationDto } from '@gitroom/nestjs-libraries/dtos/media/save.media.information.dto';
+import { MediaApprovalStatus, MediaTier } from '@prisma/client';
 
 @Injectable()
 export class MediaRepository {
   constructor(private _media: PrismaRepository<'media'>) {}
 
-  saveFile(org: string, fileName: string, filePath: string, originalName?: string) {
+  saveFile(
+    org: string,
+    fileName: string,
+    filePath: string,
+    originalName?: string,
+    options?: {
+      mediaTier?: MediaTier;
+      approvalStatus?: MediaApprovalStatus;
+    }
+  ) {
     return this._media.model.media.create({
       data: {
         organization: {
@@ -17,6 +27,8 @@ export class MediaRepository {
         name: fileName,
         path: filePath,
         originalName: originalName || null,
+        mediaTier: options?.mediaTier || MediaTier.PHOTO_SOURCE,
+        approvalStatus: options?.approvalStatus || MediaApprovalStatus.PENDING,
       },
       select: {
         id: true,
@@ -25,6 +37,12 @@ export class MediaRepository {
         path: true,
         thumbnail: true,
         alt: true,
+        thumbnailTimestamp: true,
+        mediaTier: true,
+        approvalStatus: true,
+        approvedAt: true,
+        approvedByUserId: true,
+        approvalNote: true,
       },
     });
   }
@@ -71,6 +89,11 @@ export class MediaRepository {
         thumbnail: true,
         alt: true,
         thumbnailTimestamp: true,
+        mediaTier: true,
+        approvalStatus: true,
+        approvedAt: true,
+        approvedByUserId: true,
+        approvalNote: true,
       },
     });
   }
@@ -168,11 +191,60 @@ export class MediaRepository {
         thumbnail: true,
         path: true,
         thumbnailTimestamp: true,
+        mediaTier: true,
+        approvalStatus: true,
+        approvedAt: true,
+        approvedByUserId: true,
+        approvalNote: true,
       },
     });
   }
 
-  async getMedia(org: string, page: number, search?: string) {
+  reviewMedia(
+    org: string,
+    id: string,
+    approvalStatus: MediaApprovalStatus,
+    userId: string,
+    approvalNote?: string
+  ) {
+    const approved = approvalStatus === MediaApprovalStatus.APPROVED;
+
+    return this._media.model.media.update({
+      where: {
+        id,
+        organizationId: org,
+      },
+      data: {
+        approvalStatus,
+        approvalNote: approvalNote || null,
+        mediaTier: approved ? MediaTier.READY_FOR_PUBLIC : undefined,
+        approvedAt: approved ? new Date() : null,
+        approvedByUserId: approved ? userId : null,
+      },
+      select: {
+        id: true,
+        name: true,
+        originalName: true,
+        alt: true,
+        thumbnail: true,
+        path: true,
+        thumbnailTimestamp: true,
+        mediaTier: true,
+        approvalStatus: true,
+        approvedAt: true,
+        approvedByUserId: true,
+        approvalNote: true,
+      },
+    });
+  }
+
+  async getMedia(
+    org: string,
+    page: number,
+    search?: string,
+    mediaTier?: MediaTier,
+    approvalStatus?: MediaApprovalStatus
+  ) {
     const pageNum = (page || 1) - 1;
     const trimmedSearch = search?.trim();
     const searchFilter = trimmedSearch
@@ -183,6 +255,8 @@ export class MediaRepository {
           },
         }
       : {};
+    const tierFilter = mediaTier ? { mediaTier } : {};
+    const approvalFilter = approvalStatus ? { approvalStatus } : {};
     const query = {
       where: {
         organization: {
@@ -190,6 +264,8 @@ export class MediaRepository {
         },
         deletedAt: null,
         ...searchFilter,
+        ...tierFilter,
+        ...approvalFilter,
       },
     };
     const pages = Math.ceil((await this._media.model.media.count(query)) / 18);
@@ -198,6 +274,8 @@ export class MediaRepository {
         organizationId: org,
         deletedAt: null,
         ...searchFilter,
+        ...tierFilter,
+        ...approvalFilter,
       },
       orderBy: {
         createdAt: 'desc',
@@ -210,6 +288,11 @@ export class MediaRepository {
         thumbnail: true,
         alt: true,
         thumbnailTimestamp: true,
+        mediaTier: true,
+        approvalStatus: true,
+        approvedAt: true,
+        approvedByUserId: true,
+        approvalNote: true,
       },
       skip: pageNum * 18,
       take: 18,

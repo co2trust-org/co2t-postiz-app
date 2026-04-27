@@ -14,7 +14,8 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
-import { Organization } from '@prisma/client';
+import { GetUserFromRequest } from '@gitroom/nestjs-libraries/user/user.from.request';
+import { MediaTier, Organization, User } from '@prisma/client';
 import { MediaService } from '@gitroom/nestjs-libraries/database/prisma/media/media.service';
 import { ApiTags } from '@nestjs/swagger';
 import handleR2Upload from '@gitroom/nestjs-libraries/upload/r2.uploader';
@@ -25,6 +26,12 @@ import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
 import { SaveMediaInformationDto } from '@gitroom/nestjs-libraries/dtos/media/save.media.information.dto';
 import { VideoDto } from '@gitroom/nestjs-libraries/dtos/videos/video.dto';
 import { VideoFunctionDto } from '@gitroom/nestjs-libraries/dtos/videos/video.function.dto';
+import { MediaApprovalDto } from '@gitroom/nestjs-libraries/dtos/media/media-approval.dto';
+import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
+import {
+  AuthorizationActions,
+  Sections,
+} from '@gitroom/backend/services/auth/permissions/permission.exception.class';
 
 @ApiTags('Media')
 @Controller('/media')
@@ -89,7 +96,13 @@ export class MediaController {
 
     const file = await this.storage.uploadSimple(image.output);
 
-    return this._mediaService.saveFile(org.id, file.split('/').pop(), file);
+    return this._mediaService.saveFile(
+      org.id,
+      file.split('/').pop(),
+      file,
+      undefined,
+      { mediaTier: MediaTier.AI_SOURCE }
+    );
   }
 
   @Post('/upload-server')
@@ -97,7 +110,8 @@ export class MediaController {
   @UsePipes(new CustomFileValidationPipe())
   async uploadServer(
     @GetOrgFromRequest() org: Organization,
-    @UploadedFile() file: Express.Multer.File
+    @UploadedFile() file: Express.Multer.File,
+    @Body('mediaTier') mediaTier?: MediaTier
   ) {
     const originalName = file?.originalname || '';
     const uploadedFile = await this.storage.uploadFile(file);
@@ -105,7 +119,8 @@ export class MediaController {
       org.id,
       uploadedFile.originalname,
       uploadedFile.path,
-      originalName
+      originalName,
+      { mediaTier }
     );
   }
 
@@ -114,7 +129,8 @@ export class MediaController {
     @GetOrgFromRequest() org: Organization,
     @Req() req: Request,
     @Body('name') name: string,
-    @Body('originalName') originalName: string
+    @Body('originalName') originalName: string,
+    @Body('mediaTier') mediaTier?: MediaTier
   ) {
     if (!name) {
       return false;
@@ -123,7 +139,8 @@ export class MediaController {
       org.id,
       name,
       process.env.CLOUDFLARE_BUCKET_URL + '/' + name,
-      originalName || undefined
+      originalName || undefined,
+      { mediaTier }
     );
   }
 
@@ -135,13 +152,31 @@ export class MediaController {
     return this._mediaService.saveMediaInformation(org.id, body);
   }
 
+  @Post('/:id/approval')
+  @CheckPolicies([AuthorizationActions.Update, Sections.ADMIN])
+  reviewMedia(
+    @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
+    @Param('id') id: string,
+    @Body() body: MediaApprovalDto
+  ) {
+    return this._mediaService.reviewMedia(
+      org.id,
+      id,
+      body.approvalStatus,
+      user.id,
+      body.approvalNote
+    );
+  }
+
   @Post('/upload-simple')
   @UseInterceptors(FileInterceptor('file'))
   @UsePipes(new CustomFileValidationPipe())
   async uploadSimple(
     @GetOrgFromRequest() org: Organization,
     @UploadedFile('file') file: Express.Multer.File,
-    @Body('preventSave') preventSave: string = 'false'
+    @Body('preventSave') preventSave: string = 'false',
+    @Body('mediaTier') mediaTier?: MediaTier
   ) {
     const originalName = file.originalname;
     const getFile = await this.storage.uploadFile(file);
@@ -155,7 +190,8 @@ export class MediaController {
       org.id,
       getFile.originalname,
       getFile.path,
-      originalName
+      originalName,
+      { mediaTier }
     );
   }
 
@@ -180,7 +216,8 @@ export class MediaController {
       name,
       // @ts-ignore
       upload.Location,
-      originalName || undefined
+      originalName || undefined,
+      { mediaTier: req.body?.mediaTier }
     );
 
     res.status(200).json({ ...upload, saved: saveFile });
@@ -190,9 +227,17 @@ export class MediaController {
   getMedia(
     @GetOrgFromRequest() org: Organization,
     @Query('page') page: number,
-    @Query('search') search?: string
+    @Query('search') search?: string,
+    @Query('mediaTier') mediaTier?: MediaTier,
+    @Query('approvalStatus') approvalStatus?: any
   ) {
-    return this._mediaService.getMedia(org.id, page, search);
+    return this._mediaService.getMedia(
+      org.id,
+      page,
+      search,
+      mediaTier,
+      approvalStatus
+    );
   }
 
   @Get('/video-options')
