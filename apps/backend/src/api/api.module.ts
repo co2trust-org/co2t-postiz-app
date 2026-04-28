@@ -14,6 +14,7 @@ import { SettingsController } from '@gitroom/backend/api/routes/settings.control
 import { PostsController } from '@gitroom/backend/api/routes/posts.controller';
 import { CalendarController } from '@gitroom/backend/api/routes/calendar.controller';
 import { MediaController } from '@gitroom/backend/api/routes/media.controller';
+import { PromoImageTemplateController } from '@gitroom/backend/api/routes/promo-image-template.controller';
 import { UploadModule } from '@gitroom/nestjs-libraries/upload/upload.module';
 import { BillingController } from '@gitroom/backend/api/routes/billing.controller';
 import { NotificationsController } from '@gitroom/backend/api/routes/notifications.controller';
@@ -55,6 +56,7 @@ const authenticatedController = [
   PostsController,
   CalendarController,
   MediaController,
+  PromoImageTemplateController,
   BillingController,
   NotificationsController,
   CopilotController,

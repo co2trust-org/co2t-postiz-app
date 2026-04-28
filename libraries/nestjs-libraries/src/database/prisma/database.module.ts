@@ -14,6 +14,8 @@ import { PostsRepository } from '@gitroom/nestjs-libraries/database/prisma/posts
 import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
 import { MediaService } from '@gitroom/nestjs-libraries/database/prisma/media/media.service';
 import { MediaRepository } from '@gitroom/nestjs-libraries/database/prisma/media/media.repository';
+import { PromoImageTemplateRepository } from '@gitroom/nestjs-libraries/database/prisma/promo-image-template/promo-image-template.repository';
+import { PromoImageTemplateService } from '@gitroom/nestjs-libraries/database/prisma/promo-image-template/promo-image-template.service';
 import { NotificationsRepository } from '@gitroom/nestjs-libraries/database/prisma/notifications/notifications.repository';
 import { EmailService } from '@gitroom/nestjs-libraries/services/email.service';
 import { StripeService } from '@gitroom/nestjs-libraries/services/stripe.service';
@@ -101,6 +103,8 @@ const temporalFallbackProvider = temporalOptional
     SignatureService,
     MediaService,
     MediaRepository,
+    PromoImageTemplateRepository,
+    PromoImageTemplateService,
     AgenciesService,
     AgenciesRepository,
     IntegrationManager,

@@ -49,6 +49,7 @@ model Organization {
   productBriefs       ProductBrief[]
   brandAssistantProfile BrandAssistantProfile?
   assistantHttpAuditLogs AssistantHttpAuditLog[]
+  promoImageTemplates   PromoImageTemplate[]
 
   @@index([apiKey])
   @@index([streakSince])
@@ -65,6 +66,7 @@ model Tags {
   updatedAt    DateTime     @updatedAt
   organization Organization @relation(fields: [orgId], references: [id])
   posts        TagsPosts[]
+  media        TagsMedia[]
 
   @@index([orgId])
   @@index([deletedAt])
@@ -80,6 +82,20 @@ model TagsPosts {
 
   @@id([postId, tagId])
   @@unique([postId, tagId])
+}
+
+model TagsMedia {
+  mediaId   String
+  tagId     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  media     Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  tag       Tags     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([mediaId, tagId])
+  @@unique([mediaId, tagId])
+  @@index([mediaId])
+  @@index([tagId])
 }
 
 model User {
@@ -235,6 +251,7 @@ model Media {
   agencies           SocialMediaAgency[]
   userPicture        User[]
   oauthApps          OAuthApp[]
+  tags               TagsMedia[]
 
   @@index([name])
   @@index([organizationId])
@@ -242,6 +259,21 @@ model Media {
   @@index([organizationId, approvalStatus])
   @@index([organizationId, mediaTier, approvalStatus])
   @@index([type])
+}
+
+model PromoImageTemplate {
+  id               String       @id @default(cuid())
+  organizationId   String
+  name             String
+  promptTemplate   String
+  styleBlock       String?
+  fieldSchema      String       @default("[]")
+  defaultTagIds    String       @default("[]")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 model SocialMediaAgency {

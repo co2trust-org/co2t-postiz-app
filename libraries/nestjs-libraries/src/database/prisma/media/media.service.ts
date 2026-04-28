@@ -102,6 +102,36 @@ export class MediaService {
     return generating;
   }
 
+  /**
+   * Expand prompt with generatePromptForPicture, render image, upload, and persist as AI_SOURCE media.
+   * @returns Saved media row or false when Stripe-gated credits are exhausted.
+   */
+  async generateImageWithPromptUploadAndSave(
+    org: Organization,
+    prompt: string
+  ) {
+    const total = await this._subscriptionService.checkCredits(org);
+    if (process.env.STRIPE_PUBLISHABLE_KEY && total.credits <= 0) {
+      return false;
+    }
+
+    const raw = await this.generateImage(prompt, org, true);
+    const payload =
+      typeof raw === 'string' && raw.startsWith('data:')
+        ? raw
+        : `data:image/png;base64,${raw}`;
+
+    const file = await this.storage.uploadSimple(payload);
+
+    return this.saveFile(
+      org.id,
+      file.split('/').pop()!,
+      file,
+      undefined,
+      { mediaTier: MediaTier.AI_SOURCE }
+    );
+  }
+
   saveFile(
     org: string,
     fileName: string,
@@ -140,7 +170,8 @@ export class MediaService {
     page: number,
     search?: string,
     mediaTier?: MediaTier,
-    approvalStatus?: MediaApprovalStatus
+    approvalStatus?: MediaApprovalStatus,
+    tagId?: string
   ) {
     if (mediaTier && !Object.values(MediaTier).includes(mediaTier)) {
       throw new BadRequestException('Invalid media tier');
@@ -158,8 +189,35 @@ export class MediaService {
       page,
       search,
       mediaTier,
-      approvalStatus
+      approvalStatus,
+      tagId
     );
+  }
+
+  async setMediaTags(orgId: string, mediaId: string, tagIds: string[]) {
+    const result = await this._mediaRepository.setMediaTags(
+      orgId,
+      mediaId,
+      tagIds
+    );
+    if (!result.ok) {
+      if (result.reason === 'not_found') {
+        throw new BadRequestException('Media not found');
+      }
+      throw new BadRequestException('One or more tags are invalid');
+    }
+    const row = await this._mediaRepository.getMediaItemWithTagsForOrg(
+      orgId,
+      mediaId
+    );
+    if (!row) {
+      throw new BadRequestException('Media not found');
+    }
+    const { tags, ...rest } = row;
+    return {
+      ...rest,
+      tags: tags.map((t) => t.tag),
+    };
   }
 
   saveMediaInformation(org: string, data: SaveMediaInformationDto) {

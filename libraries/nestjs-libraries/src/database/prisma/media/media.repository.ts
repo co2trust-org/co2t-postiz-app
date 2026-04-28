@@ -1,11 +1,17 @@
-import { PrismaRepository } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
+import {
+  PrismaRepository,
+  PrismaService,
+} from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 import { SaveMediaInformationDto } from '@gitroom/nestjs-libraries/dtos/media/save.media.information.dto';
-import { MediaApprovalStatus, MediaTier } from '@prisma/client';
+import { MediaApprovalStatus, MediaTier, Prisma } from '@prisma/client';
 
 @Injectable()
 export class MediaRepository {
-  constructor(private _media: PrismaRepository<'media'>) {}
+  constructor(
+    private _media: PrismaRepository<'media'>,
+    private _prisma: PrismaService
+  ) {}
 
   saveFile(
     org: string,
@@ -238,12 +244,82 @@ export class MediaRepository {
     });
   }
 
+  async setMediaTags(orgId: string, mediaId: string, tagIds: string[]) {
+    const media = await this._media.model.media.findFirst({
+      where: { id: mediaId, organizationId: orgId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!media) {
+      return { ok: false as const, reason: 'not_found' as const };
+    }
+    if (tagIds.length) {
+      const validTags = await this._prisma.tags.findMany({
+        where: {
+          id: { in: tagIds },
+          orgId,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (validTags.length !== tagIds.length) {
+        return { ok: false as const, reason: 'invalid_tags' as const };
+      }
+    }
+    await this._prisma.$transaction([
+      this._prisma.tagsMedia.deleteMany({ where: { mediaId } }),
+      ...(tagIds.length
+        ? [
+            this._prisma.tagsMedia.createMany({
+              data: tagIds.map((tagId) => ({ mediaId, tagId })),
+            }),
+          ]
+        : []),
+    ]);
+    return { ok: true as const };
+  }
+
+  getMediaItemWithTagsForOrg(orgId: string, mediaId: string) {
+    return this._media.model.media.findFirst({
+      where: {
+        id: mediaId,
+        organizationId: orgId,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        originalName: true,
+        path: true,
+        thumbnail: true,
+        alt: true,
+        thumbnailTimestamp: true,
+        mediaTier: true,
+        approvalStatus: true,
+        approvedAt: true,
+        approvedByUserId: true,
+        approvalNote: true,
+        tags: {
+          select: {
+            tag: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
   async getMedia(
     org: string,
     page: number,
     search?: string,
     mediaTier?: MediaTier,
-    approvalStatus?: MediaApprovalStatus
+    approvalStatus?: MediaApprovalStatus,
+    tagId?: string
   ) {
     const pageNum = (page || 1) - 1;
     const trimmedSearch = search?.trim();
@@ -257,26 +333,30 @@ export class MediaRepository {
       : {};
     const tierFilter = mediaTier ? { mediaTier } : {};
     const approvalFilter = approvalStatus ? { approvalStatus } : {};
+    const tagFilter: Prisma.MediaWhereInput = tagId
+      ? {
+          tags: {
+            some: {
+              tagId,
+              tag: { orgId: org, deletedAt: null },
+            },
+          },
+        }
+      : {};
+    const baseWhere = {
+      organizationId: org,
+      deletedAt: null,
+      ...searchFilter,
+      ...tierFilter,
+      ...approvalFilter,
+      ...tagFilter,
+    };
     const query = {
-      where: {
-        organization: {
-          id: org,
-        },
-        deletedAt: null,
-        ...searchFilter,
-        ...tierFilter,
-        ...approvalFilter,
-      },
+      where: baseWhere,
     };
     const pages = Math.ceil((await this._media.model.media.count(query)) / 18);
     const results = await this._media.model.media.findMany({
-      where: {
-        organizationId: org,
-        deletedAt: null,
-        ...searchFilter,
-        ...tierFilter,
-        ...approvalFilter,
-      },
+      where: baseWhere,
       orderBy: {
         createdAt: 'desc',
       },
@@ -293,14 +373,35 @@ export class MediaRepository {
         approvedAt: true,
         approvedByUserId: true,
         approvalNote: true,
+        tags: {
+          select: {
+            tag: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+              },
+            },
+          },
+        },
       },
       skip: pageNum * 18,
       take: 18,
     });
 
+    const resultsFlat = results.map(
+      (row: (typeof results)[number]) => {
+        const { tags, ...rest } = row;
+        return {
+          ...rest,
+          tags: tags.map((t) => t.tag),
+        };
+      }
+    );
+
     return {
       pages,
-      results,
+      results: resultsFlat,
     };
   }
 }

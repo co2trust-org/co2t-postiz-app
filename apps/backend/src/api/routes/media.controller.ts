@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Put,
   Query,
   Req,
   Res,
@@ -27,6 +28,7 @@ import { SaveMediaInformationDto } from '@gitroom/nestjs-libraries/dtos/media/sa
 import { VideoDto } from '@gitroom/nestjs-libraries/dtos/videos/video.dto';
 import { VideoFunctionDto } from '@gitroom/nestjs-libraries/dtos/videos/video.function.dto';
 import { MediaApprovalDto } from '@gitroom/nestjs-libraries/dtos/media/media-approval.dto';
+import { SetMediaTagsDto } from '@gitroom/nestjs-libraries/dtos/media/set.media.tags.dto';
 import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
 import {
   AuthorizationActions,
@@ -53,6 +55,15 @@ export class MediaController {
     @Param('id') id: string
   ) {
     return this._mediaService.convertMediaToJpg(org.id, id);
+  }
+
+  @Put('/:id/tags')
+  setMediaTags(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string,
+    @Body() body: SetMediaTagsDto
+  ) {
+    return this._mediaService.setMediaTags(org.id, id, body.tagIds);
   }
 
   @Post('/generate-video')
@@ -89,20 +100,7 @@ export class MediaController {
     @Req() req: Request,
     @Body('prompt') prompt: string
   ) {
-    const image = await this.generateImage(org, req, prompt, true);
-    if (!image) {
-      return false;
-    }
-
-    const file = await this.storage.uploadSimple(image.output);
-
-    return this._mediaService.saveFile(
-      org.id,
-      file.split('/').pop(),
-      file,
-      undefined,
-      { mediaTier: MediaTier.AI_SOURCE }
-    );
+    return this._mediaService.generateImageWithPromptUploadAndSave(org, prompt);
   }
 
   @Post('/upload-server')
@@ -229,14 +227,16 @@ export class MediaController {
     @Query('page') page: number,
     @Query('search') search?: string,
     @Query('mediaTier') mediaTier?: MediaTier,
-    @Query('approvalStatus') approvalStatus?: any
+    @Query('approvalStatus') approvalStatus?: any,
+    @Query('tagId') tagId?: string
   ) {
     return this._mediaService.getMedia(
       org.id,
       page,
       search,
       mediaTier,
-      approvalStatus
+      approvalStatus,
+      tagId
     );
   }
 

@@ -34,6 +34,7 @@ import { MediaComponentInner } from '@gitroom/frontend/components/launches/helpe
 import { AiVideo } from '@gitroom/frontend/components/launches/ai.video';
 import { useModals } from '@gitroom/frontend/components/layout/new-modal';
 import { ThirdPartyMediaLibrary } from '@gitroom/frontend/components/third-parties/third-party.media-library';
+import { MediaTagsEditor } from '@gitroom/frontend/components/media/media.tags.editor';
 import { Dashboard } from '@uppy/react';
 import {
   ChevronLeftIcon,
@@ -246,6 +247,7 @@ export const MediaBox: FC<{
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
   const [debouncedSearch] = useDebounce(search, 300);
+  const [filterTagId, setFilterTagId] = useState('');
   const fetch = useFetch();
   const modals = useModals();
   const toaster = useToaster();
@@ -262,7 +264,16 @@ export const MediaBox: FC<{
     useState<MediaTierValue>(READY_FOR_PUBLIC);
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearch, activeTier]);
+  }, [debouncedSearch, activeTier, filterTagId]);
+
+  const loadFilterTagOptions = useCallback(async () => {
+    const r = await fetch('/posts/tags');
+    return r.json();
+  }, [fetch]);
+  const { data: filterTagOptions } = useSWR(
+    'media-library-tag-filter-options',
+    loadFilterTagOptions
+  );
   useEffect(() => {
     if (!availableTiers.some((tier) => tier.value === activeTier)) {
       setActiveTier(READY_FOR_PUBLIC);
@@ -277,10 +288,13 @@ export const MediaBox: FC<{
     if (debouncedSearch.trim()) {
       params.set('search', debouncedSearch.trim());
     }
+    if (filterTagId) {
+      params.set('tagId', filterTagId);
+    }
     return (await fetch(`/media?${params.toString()}`)).json();
-  }, [page, debouncedSearch, activeTier]);
+  }, [page, debouncedSearch, activeTier, filterTagId]);
   const { data, mutate, isLoading } = useSWR(
-    `get-media-${page}-${debouncedSearch}-${activeTier}`,
+    `get-media-${page}-${debouncedSearch}-${activeTier}-${filterTagId}`,
     loadMedia
   );
   const [selected, setSelected] = useState([]);
@@ -411,6 +425,24 @@ export const MediaBox: FC<{
       }
     },
     [toaster, t]
+  );
+
+  const openTagsModal = useCallback(
+    (media: { id: string; tags?: { id: string }[] }) => (e: any) => {
+      e.stopPropagation();
+      modals.openModal({
+        title: t('media_tags', 'Media tags'),
+        children: (close) => (
+          <MediaTagsEditor
+            mediaId={media.id}
+            initialSelectedIds={(media.tags || []).map((x) => x.id)}
+            onClose={close}
+            onSaved={() => mutate()}
+          />
+        ),
+      });
+    },
+    [modals, mutate, t]
   );
 
   const maximize = useCallback(
@@ -676,14 +708,27 @@ export const MediaBox: FC<{
               'hidden'
           )}
         >
-          <div className="flex-1">
+          <div className="flex-1 flex flex-wrap gap-[8px] items-center">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('search_media_by_name', 'Search by file name')}
-              className="w-full h-[44px] px-[14px] rounded-[8px] bg-newBgColorInner border border-newColColor text-[14px] outline-none focus:border-[#612BD3]"
+              className="flex-1 min-w-[200px] h-[44px] px-[14px] rounded-[8px] bg-newBgColorInner border border-newColColor text-[14px] outline-none focus:border-[#612BD3]"
             />
+            <select
+              value={filterTagId}
+              onChange={(e) => setFilterTagId(e.target.value)}
+              className="h-[44px] px-[12px] rounded-[8px] bg-newBgColorInner border border-newColColor text-[14px] outline-none focus:border-[#612BD3]"
+              aria-label={t('filter_by_tag', 'Filter by tag')}
+            >
+              <option value="">{t('all_tags', 'All tags')}</option>
+              {(filterTagOptions || []).map((tag: { id: string; name: string }) => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.name}
+                </option>
+              ))}
+            </select>
           </div>
           <input
             type="file"
@@ -873,6 +918,15 @@ export const MediaBox: FC<{
                               : t('convert_to_jpg', 'Convert to JPG')}
                           </button>
                         )}
+                        {standalone && (
+                          <button
+                            type="button"
+                            onClick={openTagsModal(media)}
+                            className="cursor-pointer h-[34px] px-[12px] rounded-[8px] bg-[#612BD3]/30 text-white text-[12px] font-[600] shrink-0"
+                          >
+                            {t('tags', 'Tags')}
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={maximize(media)}
@@ -954,9 +1008,16 @@ export const MediaBox: FC<{
                         onClick={deleteImage(media)}
                       />
                     )}
-                    {standalone && canReviewMedia && (
-                      <div className="absolute left-[8px] bottom-[8px] z-[100] hidden group-hover:flex gap-[6px]">
-                        {media.approvalStatus !== 'APPROVED' && (
+                    {standalone && (
+                      <div className="absolute left-[8px] bottom-[8px] z-[100] hidden group-hover:flex flex-wrap gap-[6px] max-w-[90%]">
+                        <button
+                          type="button"
+                          onClick={openTagsModal(media)}
+                          className="cursor-pointer h-[30px] px-[10px] rounded-[7px] bg-[#612BD3]/40 text-white text-[11px] font-[700]"
+                        >
+                          {t('tags', 'Tags')}
+                        </button>
+                        {canReviewMedia && media.approvalStatus !== 'APPROVED' && (
                           <button
                             type="button"
                             onClick={reviewMedia(media, 'APPROVED')}
@@ -965,7 +1026,7 @@ export const MediaBox: FC<{
                             {t('approve', 'Approve')}
                           </button>
                         )}
-                        {media.approvalStatus !== 'REJECTED' && (
+                        {canReviewMedia && media.approvalStatus !== 'REJECTED' && (
                           <button
                             type="button"
                             onClick={reviewMedia(media, 'REJECTED')}
