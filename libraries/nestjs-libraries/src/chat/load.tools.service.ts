@@ -48,6 +48,13 @@ export class LoadToolsService {
       description: 'Agent that helps manage and schedule social media posts for users',
       instructions: ({ requestContext }) => {
         const ui: string = requestContext.get('ui' as never);
+        const agentAccountContext = String(
+          requestContext.get('agentAccountContext' as never) || ''
+        ).trim();
+        const accountCtxBlock =
+          agentAccountContext.length > 0
+            ? `\n\n### Channel & calendar context (from the Agent sidebar — respect when drafting or scheduling):\n${agentAccountContext.slice(0, 12000)}`
+            : '';
         return `
       Global information:
         - Date (UTC): ${dayjs().format('YYYY-MM-DD HH:mm:ss')}
@@ -87,6 +94,7 @@ export class LoadToolsService {
         ],
         !!ui
       )}
+      ${accountCtxBlock}
 `;
       },
       model: openai(

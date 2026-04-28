@@ -25,9 +25,11 @@ import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permis
 import { AuthorizationActions, Sections } from '@gitroom/backend/services/auth/permissions/permission.exception.class';
 
 export type ChannelsContext = {
-  integrations: string;
+  integrations: unknown;
   organization: string;
   ui: string;
+  /** Serialized user-visible context (notes, analytics, Postiz posts) for Mastra instructions */
+  agentAccountContext: string;
 };
 
 /** Mastra recall() returns `messages` (MastraDBMessage[]), not uiMessages. Normalize for the agent UI. */
@@ -70,8 +72,13 @@ export class CopilotController {
     private _mastraService: MastraService
   ) {}
 
+  private propsFromCopilotReq(req: Request): Record<string, unknown> {
+    const p = req?.body?.variables?.properties;
+    return p && typeof p === 'object' ? (p as Record<string, unknown>) : {};
+  }
+
   private resolveRequestedModel(req: Request): string {
-    const requestedModel = req?.body?.variables?.properties?.aiModel;
+    const requestedModel = this.propsFromCopilotReq(req).aiModel;
     if (
       typeof requestedModel === 'string' &&
       ALLOWED_OPENAI_MODELS.includes(requestedModel)
@@ -122,15 +129,26 @@ export class CopilotController {
         .json({ error: 'openai_api_key_missing', message: 'AI unavailable' });
     }
     const mastra = await this._mastraService.mastra();
+    const props = this.propsFromCopilotReq(req);
+    const agentAccountContext =
+      typeof props.agentAccountContext === 'string'
+        ? props.agentAccountContext.slice(0, 14000)
+        : '';
+
     const requestContext = new RequestContext<ChannelsContext>();
     requestContext.set(
       'integrations',
-      req?.body?.variables?.properties?.integrations || []
+      props.integrations ?? []
     );
 
     requestContext.set('organization', JSON.stringify(organization));
     requestContext.set('ui', 'true');
+    requestContext.set('agentAccountContext', agentAccountContext);
     const model = this.resolveRequestedModel(req);
+
+    const disableParallel =
+      props.disableParallelToolCalls === true;
+    const keepSystemRole = props.keepSystemRole === true;
 
     const agents = MastraAgent.getLocalAgents({
       resourceId: organization.id,
@@ -148,6 +166,8 @@ export class CopilotController {
       // properties: req.body.variables.properties,
       serviceAdapter: new OpenAIAdapter({
         model,
+        disableParallelToolCalls: disableParallel,
+        keepSystemRole,
       }),
     });
 
