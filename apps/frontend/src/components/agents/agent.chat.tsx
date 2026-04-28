@@ -141,7 +141,6 @@ export const AgentChat: FC<{ mode?: AgentChatMode }> = ({ mode = 'agent' }) => {
 
   return (
     <CopilotKit
-      key={`agent-thread-${threadId}`}
       {...(threadId === 'new' ? {} : { threadId })}
       credentials="include"
       runtimeUrl={backendUrl + '/copilot/agent'}
@@ -234,25 +233,37 @@ function mapRoleToCopilot(
 const LoadMessages: FC<{ id?: string }> = ({ id }) => {
   const { setMessages } = useCopilotMessagesContext();
   const fetch = useFetch();
+  /** Bumps whenever we navigate away — ignore stale loads (setMessages identity is unstable across Copilot internals). */
   const requestIdRef = useRef(0);
+  const setMessagesRef = useRef(setMessages);
+  setMessagesRef.current = setMessages;
 
-  const loadMessages = useCallback(
-    async (idToSet: string) => {
-      const currentRequestId = ++requestIdRef.current;
+  useEffect(() => {
+    if (!id || id === 'new') {
+      requestIdRef.current += 1;
+      setMessagesRef.current([]);
+      return;
+    }
+
+    const seq = ++requestIdRef.current;
+
+    void (async () => {
       try {
-        const res = await fetch(`/copilot/${idToSet}/list`);
+        const res = await fetch(`/copilot/${id}/list`);
+        if (seq !== requestIdRef.current) {
+          return;
+        }
+
         if (!res.ok) {
           console.warn(
             '[agent] load thread messages failed',
-            idToSet,
+            id,
             res.status
           );
-          if (currentRequestId !== requestIdRef.current) {
-            return;
-          }
-          setMessages([]);
+          setMessagesRef.current([]);
           return;
         }
+
         const data = await res.json();
         const rows =
           data.uiMessages ||
@@ -265,18 +276,19 @@ const LoadMessages: FC<{ id?: string }> = ({ id }) => {
                     : JSON.stringify(m.content ?? ''),
               }))
             : []);
+
+        if (seq !== requestIdRef.current) {
+          return;
+        }
+
         if (!Array.isArray(rows)) {
-          if (currentRequestId !== requestIdRef.current) {
-            return;
-          }
-          setMessages([]);
+          setMessagesRef.current([]);
           return;
         }
+
         const slicedRows = rows.slice(-MAX_THREAD_MESSAGES);
-        if (currentRequestId !== requestIdRef.current) {
-          return;
-        }
-        setMessages(
+
+        setMessagesRef.current(
           slicedRows.map((p: { role: string; content: string }) => {
             return new TextMessage({
               content: String(p.content ?? '').slice(0, MAX_MESSAGE_CONTENT_CHARS),
@@ -285,24 +297,14 @@ const LoadMessages: FC<{ id?: string }> = ({ id }) => {
           })
         );
       } catch (e) {
-        console.warn('[agent] load thread messages error', idToSet, e);
-        if (currentRequestId !== requestIdRef.current) {
+        console.warn('[agent] load thread messages error', id, e);
+        if (seq !== requestIdRef.current) {
           return;
         }
-        setMessages([]);
+        setMessagesRef.current([]);
       }
-    },
-    [fetch, setMessages]
-  );
-
-  useEffect(() => {
-    if (!id || id === 'new') {
-      requestIdRef.current += 1;
-      setMessages([]);
-      return;
-    }
-    loadMessages(id);
-  }, [id, loadMessages, setMessages]);
+    })();
+  }, [fetch, id]);
 
   return null;
 };

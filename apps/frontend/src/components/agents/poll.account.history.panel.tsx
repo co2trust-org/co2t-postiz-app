@@ -27,9 +27,27 @@ const MAX_CACHED_IMAGES = 6;
 const ANALYTICS_POLL_RETRY = 2;
 const POLL_SUPPORTED_IDENTIFIERS = ['instagram', 'instagram-standalone', 'facebook'];
 export const AGENT_MODEL_OPTIONS = [
-  { value: 'gpt-4.1', label: 'gpt-4.1' },
+  {
+    value: 'gpt-5.5',
+    label: 'gpt-5.5 (frontier, latest generation)',
+  },
+  { value: 'gpt-5.4', label: 'gpt-5.4' },
+  { value: 'gpt-5.4-mini', label: 'gpt-5.4-mini' },
+  { value: 'gpt-5.4-nano', label: 'gpt-5.4-nano (low cost)' },
+  { value: 'gpt-5.1', label: 'gpt-5.1' },
+  { value: 'gpt-5.1-mini', label: 'gpt-5.1-mini' },
+  { value: 'gpt-5', label: 'gpt-5' },
+  { value: 'gpt-5-mini', label: 'gpt-5-mini' },
+  {
+    value: 'gpt-4.1',
+    label: 'gpt-4.1 (prior gen default)',
+  },
   { value: 'gpt-4.1-mini', label: 'gpt-4.1-mini' },
-  { value: 'gpt-4.1-nano', label: 'gpt-4.1-nano (cheapest)' },
+  { value: 'gpt-4.1-nano', label: 'gpt-4.1-nano (cheapest 4.x)' },
+  { value: 'gpt-4o', label: 'gpt-4o' },
+  { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },
+  { value: 'o4-mini', label: 'o4-mini (reasoning)' },
+  { value: 'o3-mini', label: 'o3-mini (reasoning)' },
 ];
 
 const MAX_COMPILED_CONTEXT_CHARS = 10000;

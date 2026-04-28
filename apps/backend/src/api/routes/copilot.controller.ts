@@ -60,8 +60,43 @@ function textFromMastraDbMessage(msg: Record<string, unknown>): string {
   return '';
 }
 
-const ALLOWED_OPENAI_MODELS = ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano'];
 const DEFAULT_OPENAI_MODEL = 'gpt-4.1';
+
+/** Curated shortcuts; validatedOpenAIModel allows any matching ID so new API tiers work without redeploy. */
+const KNOWN_OPENAI_MODELS = new Set([
+  'gpt-4.1',
+  'gpt-4.1-mini',
+  'gpt-4.1-nano',
+  'gpt-4o',
+  'gpt-4o-mini',
+  'gpt-5',
+  'gpt-5-mini',
+  'gpt-5-nano',
+  'gpt-5.1',
+  'gpt-5.1-mini',
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'gpt-5.4-nano',
+  'gpt-5.5',
+  'gpt-5.5-mini',
+  'o3-mini',
+  'o4-mini',
+]);
+
+function validatedOpenAIModel(model: string): string | null {
+  const m = model.trim();
+  if (m.length < 3 || m.length > 80) {
+    return null;
+  }
+  if (KNOWN_OPENAI_MODELS.has(m)) {
+    return m;
+  }
+  // Forward-compatible: e.g. gpt-5.2, dated snapshots, o-series additions
+  if (/^(gpt-[a-z0-9._-]{1,72}|o\d[a-z0-9._-]{0,71})$/i.test(m)) {
+    return m;
+  }
+  return null;
+}
 const MAX_THREAD_LIST_LIMIT = 200;
 const MAX_THREAD_RECALL_MESSAGES = 200;
 
@@ -79,13 +114,11 @@ export class CopilotController {
 
   private resolveRequestedModel(req: Request): string {
     const requestedModel = this.propsFromCopilotReq(req).aiModel;
-    if (
-      typeof requestedModel === 'string' &&
-      ALLOWED_OPENAI_MODELS.includes(requestedModel)
-    ) {
-      return requestedModel;
+    if (typeof requestedModel !== 'string') {
+      return DEFAULT_OPENAI_MODEL;
     }
-    return DEFAULT_OPENAI_MODEL;
+    const ok = validatedOpenAIModel(requestedModel);
+    return ok ?? DEFAULT_OPENAI_MODEL;
   }
 
   @Post('/chat')
@@ -185,6 +218,34 @@ export class CopilotController {
     );
   }
 
+  /** Static path before `/:thread/list` so `/copilot/list` is never mistaken for `/copilot/:thread/list`. */
+  @Get('/list')
+  @CheckPolicies([AuthorizationActions.Create, Sections.AI])
+  async getList(@GetOrgFromRequest() organization: Organization) {
+    const mastra = await this._mastraService.mastra();
+    const memory = await mastra.getAgent('postiz').getMemory();
+    try {
+      const list = await memory.listThreads({
+        filter: { resourceId: organization.id },
+        perPage: MAX_THREAD_LIST_LIMIT,
+        page: 0,
+        orderBy: { field: 'createdAt', direction: 'DESC' },
+      });
+
+      return {
+        threads: list.threads.map((p) => ({
+          id: p.id,
+          title: p.title,
+        })),
+      };
+    } catch (err) {
+      Logger.warn(
+        `copilot thread list failed orgId=${organization.id}: ${(err as Error)?.message}`
+      );
+      return { threads: [], error: 'load_failed' };
+    }
+  }
+
   @Get('/:thread/list')
   @CheckPolicies([AuthorizationActions.Create, Sections.AI])
   async getMessagesList(
@@ -217,33 +278,6 @@ export class CopilotController {
         `copilot thread messages failed threadId=${threadId}: ${(err as Error)?.message}`
       );
       return { uiMessages: [], messages: [], error: 'load_failed' };
-    }
-  }
-
-  @Get('/list')
-  @CheckPolicies([AuthorizationActions.Create, Sections.AI])
-  async getList(@GetOrgFromRequest() organization: Organization) {
-    const mastra = await this._mastraService.mastra();
-    const memory = await mastra.getAgent('postiz').getMemory();
-    try {
-      const list = await memory.listThreads({
-        filter: { resourceId: organization.id },
-        perPage: MAX_THREAD_LIST_LIMIT,
-        page: 0,
-        orderBy: { field: 'createdAt', direction: 'DESC' },
-      });
-
-      return {
-        threads: list.threads.map((p) => ({
-          id: p.id,
-          title: p.title,
-        })),
-      };
-    } catch (err) {
-      Logger.warn(
-        `copilot thread list failed orgId=${organization.id}: ${(err as Error)?.message}`
-      );
-      return { threads: [], error: 'load_failed' };
     }
   }
 }
