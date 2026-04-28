@@ -53,7 +53,7 @@ export class LoadToolsService {
         ).trim();
         const accountCtxBlock =
           agentAccountContext.length > 0
-            ? `\n\n### Channel & calendar context (from the Agent sidebar — respect when drafting or scheduling):\n${agentAccountContext.slice(0, 12000)}`
+            ? `\n\n### Channel, calendar, and org marketing context (sidebar + saved Brand Brain/planning — align with it when drafting or scheduling):\n${agentAccountContext.slice(0, 12000)}`
             : '';
         return `
       Global information:
@@ -71,6 +71,7 @@ export class LoadToolsService {
         - Use tool socialManager with operation posts.* | calendar.* | analytics.* | brand.* for CRUD calendar and brand profile (approvals.* not implemented yet)
       
       - We schedule posts to different integration like facebook, instagram, etc. but to the user we don't say integrations we say channels as integration is the technical name
+      - When the "### Channel, calendar, and org marketing context" block is present, it may include the team's saved Brand Brain concepts and planning targets (merged with operator notes from the Agent sidebar). Respect it for tone, themes, and cadence unless the user contradicts it clearly in the current message.
       - When scheduling a post, you must follow the social media rules and best practices.
       - When scheduling a post, you can pass an array for list of posts for a social media platform, But it has different behavior depending on the platform.
         - For platforms like Threads, Bluesky and X (Twitter), each post in the array will be a separate post in the thread.

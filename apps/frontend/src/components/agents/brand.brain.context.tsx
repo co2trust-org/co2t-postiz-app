@@ -8,6 +8,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
@@ -20,6 +21,12 @@ import {
   loadBrandBrainFromStorage,
   saveBrandBrainToStorage,
 } from '@gitroom/frontend/components/agents/brand.brain.model';
+import {
+  MARKETING_CONTEXT_KEY,
+  useMarketingContext,
+  usePatchMarketingContext,
+} from '@gitroom/frontend/components/planning/use.marketing.context';
+import { mutate } from 'swr';
 
 export type BrandBrainContextValue = {
   data: BrandBrainPersisted;
@@ -51,18 +58,70 @@ const BrandBrainContext = createContext<BrandBrainContextValue | null>(null);
 export const BrandBrainProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [data, setData] = useState<BrandBrainPersisted>(createInitialBrandBrain);
   const [pendingChatPrefill, setPendingChatPrefill] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const lastSavedJson = useRef<string>('');
+  const didMigrateEmpty = useRef(false);
+
+  const { data: marketingRes, isLoading: marketingLoading } = useMarketingContext();
+  const patchMarketing = usePatchMarketingContext();
 
   useEffect(() => {
-    setData(loadBrandBrainFromStorage());
-    setLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    if (loaded) {
-      saveBrandBrainToStorage(data);
+    if (marketingLoading) {
+      return;
     }
-  }, [data, loaded]);
+    if (marketingRes?.context?.brandBrain) {
+      const bb = marketingRes.context.brandBrain;
+      setData(bb);
+      lastSavedJson.current = JSON.stringify(bb);
+      setHydrated(true);
+      return;
+    }
+    if (didMigrateEmpty.current) {
+      return;
+    }
+    didMigrateEmpty.current = true;
+    const local = loadBrandBrainFromStorage();
+    setData(local);
+    lastSavedJson.current = JSON.stringify(local);
+    setHydrated(true);
+    void (async () => {
+      try {
+        await patchMarketing({ brandBrain: local });
+        await mutate(MARKETING_CONTEXT_KEY);
+      } catch {
+        /* network / auth */
+      }
+    })();
+  }, [marketingLoading, marketingRes, patchMarketing]);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+    saveBrandBrainToStorage(data);
+  }, [data, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated || marketingLoading) {
+      return;
+    }
+    const json = JSON.stringify(data);
+    if (json === lastSavedJson.current) {
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void (async () => {
+        try {
+          await patchMarketing({ brandBrain: data });
+          lastSavedJson.current = json;
+          await mutate(MARKETING_CONTEXT_KEY);
+        } catch {
+          /* ignore */
+        }
+      })();
+    }, 700);
+    return () => window.clearTimeout(t);
+  }, [data, hydrated, marketingLoading, patchMarketing]);
 
   const activeBrand = useMemo(() => {
     if (!data.activeBrandId) {

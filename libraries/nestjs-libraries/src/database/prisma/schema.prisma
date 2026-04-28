@@ -50,6 +50,8 @@ model Organization {
   brandAssistantProfile BrandAssistantProfile?
   assistantHttpAuditLogs AssistantHttpAuditLog[]
   promoImageTemplates   PromoImageTemplate[]
+  /// Versioned `{ version: 1, brandBrain, planning }` — see `@gitroom/nestjs-libraries/marketing/marketing.context`
+  marketingContext      Json?
 
   @@index([apiKey])
   @@index([streakSince])

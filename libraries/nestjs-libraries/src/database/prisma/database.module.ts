@@ -44,6 +44,7 @@ import { AnnouncementsRepository } from '@gitroom/nestjs-libraries/database/pris
 import { AnnouncementsService } from '@gitroom/nestjs-libraries/database/prisma/announcements/announcements.service';
 import { ProductsRepository } from '@gitroom/nestjs-libraries/database/prisma/products/products.repository';
 import { ProductsService } from '@gitroom/nestjs-libraries/database/prisma/products/products.service';
+import { MarketingContextService } from '@gitroom/nestjs-libraries/database/prisma/marketing-context/marketing-context.service';
 import { TemporalService } from 'nestjs-temporal-core';
 
 const temporalOptional = process.env.TEMPORAL_OPTIONAL === 'true';
@@ -126,6 +127,7 @@ const temporalFallbackProvider = temporalOptional
     AnnouncementsService,
     ProductsRepository,
     ProductsService,
+    MarketingContextService,
     ...temporalFallbackProvider,
   ],
   get exports() {

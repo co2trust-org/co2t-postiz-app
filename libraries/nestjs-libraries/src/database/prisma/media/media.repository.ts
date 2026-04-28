@@ -53,6 +53,19 @@ export class MediaRepository {
     });
   }
 
+  countImportedInDateRange(orgId: string, from: Date, to: Date) {
+    return this._media.model.media.count({
+      where: {
+        organizationId: orgId,
+        deletedAt: null,
+        createdAt: {
+          gte: from,
+          lte: to,
+        },
+      },
+    });
+  }
+
   getMediaById(id: string) {
     return this._media.model.media.findUnique({
       where: {

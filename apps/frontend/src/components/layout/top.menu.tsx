@@ -75,6 +75,48 @@ export const useMenuItem = () => {
       path: '/agents',
     },
     {
+      name: t('planning', 'Planning'),
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+        >
+          <path
+            d="M4 5C4 3.89543 4.89543 3 6 3H10C11.1046 3 12 3.89543 12 5V9C12 10.1046 11.1046 11 10 11H6C4.89543 11 4 10.1046 4 9V5Z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M14 13C14 11.8954 14.8954 11 16 11H20C21.1046 11 22 11.8954 22 13V17C22 18.1046 21.1046 19 20 19H16C14.8954 19 14 18.1046 14 17V13Z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M14 5C14 3.89543 14.8954 3 16 3H18C20.2091 3 22 4.79086 22 7V9C22 10.1046 21.1046 11 20 11H18C15.7909 11 14 9.20914 14 7V5Z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M2 15C2 13.8954 2.89543 13 4 13H6C8.20914 13 10 14.7909 10 17V19C10 20.1046 9.10457 21 8 21H4C2.89543 21 2 20.1046 2 19V15Z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ),
+      path: '/planning',
+    },
+    {
       name: t('brand_brain', 'Brand Brain'),
       icon: (
         <svg

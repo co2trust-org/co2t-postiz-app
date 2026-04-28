@@ -19,6 +19,7 @@ import { Organization } from '@prisma/client';
 import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { MastraAgent } from '@ag-ui/mastra';
 import { MastraService } from '@gitroom/nestjs-libraries/chat/mastra.service';
+import { MarketingContextService } from '@gitroom/nestjs-libraries/database/prisma/marketing-context/marketing-context.service';
 import { Request, Response } from 'express';
 import { RequestContext } from '@mastra/core/di';
 import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
@@ -104,7 +105,8 @@ const MAX_THREAD_RECALL_MESSAGES = 200;
 export class CopilotController {
   constructor(
     private _subscriptionService: SubscriptionService,
-    private _mastraService: MastraService
+    private _mastraService: MastraService,
+    private _marketingContextService: MarketingContextService
   ) {}
 
   private propsFromCopilotReq(req: Request): Record<string, unknown> {
@@ -168,6 +170,12 @@ export class CopilotController {
         ? props.agentAccountContext.slice(0, 14000)
         : '';
 
+    const mergedAccountContext =
+      await this._marketingContextService.mergeAgentOperatorContext(
+        organization.id,
+        agentAccountContext
+      );
+
     const requestContext = new RequestContext<ChannelsContext>();
     requestContext.set(
       'integrations',
@@ -176,7 +184,7 @@ export class CopilotController {
 
     requestContext.set('organization', JSON.stringify(organization));
     requestContext.set('ui', 'true');
-    requestContext.set('agentAccountContext', agentAccountContext);
+    requestContext.set('agentAccountContext', mergedAccountContext);
     const model = this.resolveRequestedModel(req);
 
     const disableParallel =
