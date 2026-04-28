@@ -18,7 +18,9 @@ export const MediaTagsEditor: FC<{
   const fetch = useFetch();
   const loadTags = useCallback(async () => {
     const r = await fetch('/posts/tags');
-    return r.json() as Promise<TagRow[]>;
+    const j = await r.json();
+    const list = Array.isArray(j) ? j : j?.tags ?? [];
+    return list as TagRow[];
   }, [fetch]);
   const { data: allTags, isLoading } = useSWR('media-tags-editor-tags', loadTags);
   const [selected, setSelected] = useState<Set<string>>(

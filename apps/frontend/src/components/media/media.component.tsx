@@ -268,7 +268,8 @@ export const MediaBox: FC<{
 
   const loadFilterTagOptions = useCallback(async () => {
     const r = await fetch('/posts/tags');
-    return r.json();
+    const j = await r.json();
+    return Array.isArray(j) ? j : j?.tags ?? [];
   }, [fetch]);
   const { data: filterTagOptions } = useSWR(
     'media-library-tag-filter-options',
