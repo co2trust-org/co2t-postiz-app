@@ -1,7 +1,7 @@
 'use client';
 
 import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import useSWR from 'swr';
 import type { MarketingContextDocumentV1 } from '@gitroom/nestjs-libraries/marketing/marketing.context';
 
@@ -66,5 +66,50 @@ export function usePlanningSnapshot(days: number) {
   return useSWR(key, load, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
+  });
+}
+
+export type PlanningSnapshotPayload = {
+  days: number;
+  totals: { draft: number; queued: number };
+  byIntegration: {
+    integrationId: string;
+    integrationName: string;
+    draft: number;
+    queue: number;
+  }[];
+  mediaImportedInRange: number;
+  daysWithQueuedPost: number;
+};
+
+export const COMPARE_SNAPSHOTS_KEY = 'planning-snapshots-compare-7-14-30';
+
+/** Parallel load of 7-, 14-, and 30-day pipeline snapshots for dashboard comparison. */
+export function usePlanningSnapshotsCompare() {
+  const fetch = useFetch();
+  const load = useCallback(async (): Promise<{
+    h7: PlanningSnapshotPayload;
+    h14: PlanningSnapshotPayload;
+    h30: PlanningSnapshotPayload;
+  }> => {
+    const [r7, r14, r30] = await Promise.all([
+      fetch('/marketing-context/planning-snapshot?days=7'),
+      fetch('/marketing-context/planning-snapshot?days=14'),
+      fetch('/marketing-context/planning-snapshot?days=30'),
+    ]);
+    if (!r7.ok || !r14.ok || !r30.ok) {
+      throw new Error('Failed to load planning snapshots');
+    }
+    const [h7, h14, h30] = await Promise.all([
+      r7.json() as Promise<PlanningSnapshotPayload>,
+      r14.json() as Promise<PlanningSnapshotPayload>,
+      r30.json() as Promise<PlanningSnapshotPayload>,
+    ]);
+    return { h7, h14, h30 };
+  }, [fetch]);
+
+  return useSWR(COMPARE_SNAPSHOTS_KEY, load, {
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
   });
 }
