@@ -1,7 +1,15 @@
 'use client';
 
+import Link from 'next/link';
+
 export const Logo = () => {
   return (
+    <Link
+      href="/hub"
+      prefetch={true}
+      className="block rounded-[14px] outline-none shrink-0 focus-visible:ring-2 focus-visible:ring-[#612BD3]/80 focus-visible:ring-offset-2 focus-visible:ring-offset-newBgColorInner"
+      aria-label="Postiz hub"
+    >
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="60"
@@ -28,5 +36,6 @@ export const Logo = () => {
         fill="#131019"
       />
     </svg>
+    </Link>
   );
 };
