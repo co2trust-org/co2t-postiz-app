@@ -8,6 +8,7 @@ import type { PricingInnerInterface } from '@gitroom/nestjs-libraries/database/p
 import { useUser } from '@gitroom/frontend/components/layout/user.context';
 import { useVariables } from '@gitroom/react/helpers/variable.context';
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
+import { HubMarketingDashboard } from '@gitroom/frontend/components/hub/site.hub.dashboard';
 
 type HubItem = {
   key: string;
@@ -144,15 +145,17 @@ export const SiteHub: FC = () => {
     <div className="flex flex-1 flex-col gap-[28px] p-[24px] tablet:p-[40px] max-w-[980px] w-full mx-auto overflow-auto scrollbar scrollbar-thumb-fifth scrollbar-track-newBgColorInner">
       <header className="flex flex-col gap-[12px]">
         <h2 className="text-[26px] font-[600] text-textColor tracking-tight">
-          {t('site_hub_heading', 'Postiz')}
+          {t('site_hub_heading', 'Marketing home')}
         </h2>
         <p className="text-[14px] leading-[1.55] text-textItemBlur max-w-[720px]">
           {t(
             'site_hub_intro',
-            'Schedule posts to 28+ channels, run them through workflows, review analytics in one place, and use Agent with your brand context. Jump to any area from the shortcuts below—they mirror the sidebar.'
+            'See how your publishing pipeline looks for the week ahead, where you stand versus your target, and prioritized steps to get back on track—then open any workspace from the shortcuts below.'
           )}
         </p>
       </header>
+
+      <HubMarketingDashboard />
 
       <section
         aria-labelledby="hub-site-details"
@@ -192,10 +195,22 @@ export const SiteHub: FC = () => {
         </ul>
       </section>
 
-      <section aria-labelledby="hub-quick-links">
-        <h3 id="hub-quick-links" className="sr-only">
-          {t('site_hub_shortcuts', 'Shortcuts')}
+      <section aria-labelledby="hub-workspaces-heading">
+        <h3
+          id="hub-workspaces-heading"
+          className="text-[15px] font-[600] text-textColor mb-[8px]"
+        >
+          {t('site_hub_workspaces', 'Workspaces')}
         </h3>
+        <p className="text-[13px] text-textItemBlur mb-[14px]">
+          {t(
+            'site_hub_shortcuts_intro',
+            'Same destinations as the left rail—jump in from here when you are done with the dashboard above.'
+          )}
+        </p>
+        <div className="sr-only" id="hub-quick-links">
+          {t('site_hub_shortcuts', 'Shortcuts')}
+        </div>
         <div className="grid grid-cols-1 min-[560px]:grid-cols-2 gap-[14px]">
           {rows.map((item) => {
             const isExternal = item.path.startsWith('http');

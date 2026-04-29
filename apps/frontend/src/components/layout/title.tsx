@@ -14,7 +14,7 @@ export const Title = () => {
       return '';
     }
     if (path.startsWith('/hub')) {
-      return t('site_hub_title', 'Home');
+      return t('site_hub_title', 'Marketing home');
     }
     return menuItems.find((item) => path.indexOf(item.path) > -1)?.name;
   }, [path, menuItems, t]);
