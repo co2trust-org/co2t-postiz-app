@@ -84,6 +84,7 @@ export interface Integrations {
   name: string;
   id: string;
   disabled?: boolean;
+  refreshNeeded?: boolean;
   inBetweenSteps: boolean;
   editor: 'none' | 'normal' | 'markdown' | 'html';
   display: string;

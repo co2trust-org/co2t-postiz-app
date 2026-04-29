@@ -18,7 +18,6 @@ import SafeImage from '@gitroom/react/helpers/safe.image';
 import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
 import { useWaitForClass } from '@gitroom/helpers/utils/use.wait.for.class';
 import { MultiMediaComponent } from '@gitroom/frontend/components/media/media.component';
-import { Integration } from '@prisma/client';
 import { Integrations as SocialIntegrations } from '@gitroom/frontend/components/launches/calendar.context';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
@@ -105,7 +104,7 @@ export const AgentList: FC<{ onChange: (arr: any[]) => void }> = ({
   });
 
   const setIntegration = useCallback(
-    (integration: Integration) => () => {
+    (integration: SocialIntegrations) => () => {
       if (selected.some((p) => p.id === integration.id)) {
         onChange(selected.filter((p) => p.id !== integration.id));
         setSelected(selected.filter((p) => p.id !== integration.id));
