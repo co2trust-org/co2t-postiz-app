@@ -595,10 +595,13 @@ const OpenModal: FC<{
   const { properties, allIntegrations: allIntegrationsFromContext } =
     useContext(PropertiesContext);
   const startModal = useCallback(async () => {
+    const fullList = Array.isArray(allIntegrationsFromContext)
+      ? allIntegrationsFromContext
+      : [];
+    const sidebarList = Array.isArray(properties) ? properties : [];
+
     const accounts: SocialIntegrations[] =
-      allIntegrationsFromContext.length > 0
-        ? allIntegrationsFromContext
-        : properties;
+      fullList.length > 0 ? fullList : sidebarList;
 
     if (!accounts.length) {
       toaster.show(

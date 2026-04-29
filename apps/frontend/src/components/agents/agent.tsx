@@ -25,6 +25,25 @@ import { useParams, usePathname } from 'next/navigation';
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
 import useSWR from 'swr';
 
+/** Safe parse when the API fails (502/empty) or returns a non-array `integrations`. */
+async function fetchIntegrationsList(
+  fetch: ReturnType<typeof useFetch>
+): Promise<SocialIntegrations[]> {
+  const res = await fetch('/integrations/list');
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    return [];
+  }
+  if (!res.ok) return [];
+  const raw =
+    body && typeof body === 'object' && body !== null && 'integrations' in body
+      ? (body as { integrations: unknown }).integrations
+      : undefined;
+  return Array.isArray(raw) ? (raw as SocialIntegrations[]) : [];
+}
+
 export const MediaPortal: FC<{
   media: { path: string; id: string }[];
   value: string;
@@ -70,8 +89,8 @@ export const AgentList: FC<{ onChange: (arr: any[]) => void }> = ({
   const [selected, setSelected] = useState([]);
 
   const load = useCallback(async () => {
-    return (await (await fetch('/integrations/list')).json()).integrations;
-  }, []);
+    return fetchIntegrationsList(fetch);
+  }, [fetch]);
 
   const [collapseMenu, setCollapseMenu] = useCookie('collapseMenu', '0');
 
@@ -99,8 +118,9 @@ export const AgentList: FC<{ onChange: (arr: any[]) => void }> = ({
   );
 
   const sortedIntegrations = useMemo(() => {
+    const list = Array.isArray(data) ? data : [];
     return orderBy(
-      data || [],
+      list,
       ['type', 'disabled', 'identifier'],
       ['desc', 'asc', 'asc']
     );
@@ -212,8 +232,7 @@ export const Agent: FC<{ children: ReactNode; basePath?: string }> = ({
   const { data: allIntegrations = [] } = useSWR(
     'integrations',
     async () => {
-      return (await (await fetch('/integrations/list')).json())
-        .integrations as SocialIntegrations[];
+      return fetchIntegrationsList(fetch);
     },
     {
       revalidateOnFocus: false,
@@ -227,7 +246,12 @@ export const Agent: FC<{ children: ReactNode; basePath?: string }> = ({
   );
 
   return (
-    <PropertiesContext.Provider value={{ properties, allIntegrations }}>
+    <PropertiesContext.Provider
+      value={{
+        properties,
+        allIntegrations: Array.isArray(allIntegrations) ? allIntegrations : [],
+      }}
+    >
       <AgentList onChange={setProperties} />
       <div className="bg-newBgColorInner flex flex-1">{children}</div>
       <Threads basePath={basePath} />

@@ -127,11 +127,20 @@ export const PollAccountHistoryPanel: FC<{
 
   const loadIntegrations = useCallback(async () => {
     const response = await fetch('/integrations/list');
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch {
+      return [];
+    }
     if (!response.ok) {
       return [];
     }
-    const data = await response.json();
-    return data?.integrations || [];
+    const raw =
+      data && typeof data === 'object' && data !== null && 'integrations' in data
+        ? (data as { integrations: unknown }).integrations
+        : undefined;
+    return Array.isArray(raw) ? raw : [];
   }, [fetch]);
 
   const { data: integrations } = useSWR<SocialIntegration[]>(
