@@ -130,19 +130,42 @@ If the tools return errors, you would need to rerun it with the right parameters
         ).id;
         const finalOutput = [];
 
-        const integrations = {} as Record<string, Integration>;
+        const integrations = {} as Record<string, Integration | null>;
         for (const platform of inputData.socialPost) {
-          integrations[platform.integrationId] =
-            await this._integrationService.getIntegrationById(
-              organizationId,
-              platform.integrationId
-            );
+          const integration = await this._integrationService.getIntegrationById(
+            organizationId,
+            platform.integrationId
+          );
+          integrations[platform.integrationId] = integration;
 
-          const { dto, maxLength, identifier } = socialIntegrationList.find(
-            (p) =>
-              p.identifier ===
-              integrations[platform.integrationId].providerIdentifier
-          )!;
+          if (!integration) {
+            return {
+              errors: JSON.stringify([
+                {
+                  integrationId: platform.integrationId,
+                  error: 'Integration not found for this organization.',
+                },
+              ]),
+            };
+          }
+
+          const meta = socialIntegrationList.find(
+            (p) => p.identifier === integration.providerIdentifier
+          );
+          if (!meta) {
+            return {
+              errors: JSON.stringify([
+                {
+                  integrationId: platform.integrationId,
+                  providerIdentifier: integration.providerIdentifier,
+                  error:
+                    'Could not load platform rules/settings for this integration (unknown provider).',
+                },
+              ]),
+            };
+          }
+
+          const { dto, maxLength, identifier } = meta;
 
           if (dto) {
             const newDTO = new dto();

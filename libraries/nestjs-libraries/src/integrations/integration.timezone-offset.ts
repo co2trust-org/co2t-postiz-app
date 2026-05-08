@@ -10,6 +10,7 @@ dayjs.extend(timezone);
  * `IntegrationRepository` postingTimes (same convention as `dayjs.tz().utcOffset()`).
  *
  * - Integer strings (e.g. "-300" from the web client) are returned as numbers.
+ * - Blank strings (including whitespace-only) return `0`, matching legacy `+body.timezone` on `""`.
  * - IANA zones (e.g. "America/New_York") resolve to the current offset via dayjs-timezone.
  */
 export function parseIntegrationTimezoneOffsetMinutes(
@@ -20,7 +21,8 @@ export function parseIntegrationTimezoneOffsetMinutes(
   }
   const s = String(raw).trim();
   if (!s) {
-    return undefined;
+    // Match legacy `+body.timezone` on `""` / whitespace (`+''` → 0).
+    return 0;
   }
 
   if (/^-?\d+$/.test(s)) {

@@ -7,6 +7,7 @@ import {
   Res,
   Query,
   Param,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   CopilotRuntime,
@@ -101,6 +102,9 @@ function validatedOpenAIModel(model: string): string | null {
 const MAX_THREAD_LIST_LIMIT = 200;
 const MAX_THREAD_RECALL_MESSAGES = 200;
 const MAX_THREAD_RECALL_PAGE = 500;
+
+/** Thread IDs cannot reuse static `/copilot/*` path segments (defensive; avoids `/copilot/list/list`-style mistakes). */
+const RESERVED_COPILOT_THREAD_IDS = new Set(['list', 'threads']);
 
 function parseRecallPage(raw: string | undefined): number {
   const n = parseInt(String(raw ?? '0'), 10);
@@ -235,10 +239,7 @@ export class CopilotController {
     );
   }
 
-  /** Static path before `/:thread/list` so `/copilot/list` is never mistaken for `/copilot/:thread/list`. */
-  @Get('/list')
-  @CheckPolicies([AuthorizationActions.Create, Sections.AI])
-  async getList(@GetOrgFromRequest() organization: Organization) {
+  private async loadThreadIndex(organization: Organization) {
     const mastra = await this._mastraService.mastra();
     const memory = await mastra.getAgent('postiz').getMemory();
     try {
@@ -263,6 +264,17 @@ export class CopilotController {
     }
   }
 
+  /**
+   * Lists Mastra threads. Use `/copilot/threads` (canonical). `/copilot/list` remains as a legacy alias.
+   * These paths cannot collide with `GET /copilot/:thread/list` because the latter requires three path
+   * segments (`/copilot/{id}/list`), while these use two (`/copilot/threads`).
+   */
+  @Get(['threads', 'list'])
+  @CheckPolicies([AuthorizationActions.Create, Sections.AI])
+  async getList(@GetOrgFromRequest() organization: Organization) {
+    return this.loadThreadIndex(organization);
+  }
+
   @Get('/:thread/list')
   @CheckPolicies([AuthorizationActions.Create, Sections.AI])
   async getMessagesList(
@@ -270,6 +282,11 @@ export class CopilotController {
     @Param('thread') threadId: string,
     @Query('page') pageQuery?: string
   ): Promise<any> {
+    if (RESERVED_COPILOT_THREAD_IDS.has(threadId)) {
+      throw new BadRequestException(
+        'thread id conflicts with a reserved path segment; use GET /copilot/threads to list threads'
+      );
+    }
     const mastra = await this._mastraService.mastra();
     const memory = await mastra.getAgent('postiz').getMemory();
     const page = parseRecallPage(pageQuery);

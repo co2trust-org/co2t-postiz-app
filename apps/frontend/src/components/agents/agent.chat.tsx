@@ -602,8 +602,26 @@ const OpenModal: FC<{
       : [];
     const sidebarList = Array.isArray(properties) ? properties : [];
 
-    const accounts: SocialIntegrations[] =
-      fullList.length > 0 ? fullList : sidebarList;
+    /** Prefer sidebar selection, but always include channels referenced by the agent (from integrationList / tool args). */
+    const byId = new Map<string, SocialIntegrations>();
+    const pushUnique = (ch: SocialIntegrations) => {
+      if (ch?.id && !byId.has(ch.id)) {
+        byId.set(ch.id, ch);
+      }
+    };
+    const base = sidebarList.length > 0 ? sidebarList : fullList;
+    for (const ch of base) {
+      pushUnique(ch);
+    }
+    for (const row of args.list) {
+      if (!byId.has(row.integrationId)) {
+        const extra = fullList.find((i) => i.id === row.integrationId);
+        if (extra) {
+          pushUnique(extra);
+        }
+      }
+    }
+    const accounts = Array.from(byId.values());
 
     if (!accounts.length) {
       toaster.show(
@@ -635,7 +653,7 @@ const OpenModal: FC<{
 
       await new Promise((res) => {
         const group = makeId(10);
-        // Fresh launch state + full account list (selected sidebar channels may be empty).
+        // Sidebar-first channel set, extended with any IDs the agent put in the draft.
         useLaunchStore.getState().reset();
         useLaunchStore.getState().setAllIntegrations(accounts);
 

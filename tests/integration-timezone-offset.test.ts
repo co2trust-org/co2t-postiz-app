@@ -7,10 +7,14 @@ describe('parseIntegrationTimezoneOffsetMinutes', () => {
     expect(parseIntegrationTimezoneOffsetMinutes('0')).toBe(0);
   });
 
-  it('returns undefined for empty / non-numeric IANA-like garbage without throwing', () => {
-    expect(parseIntegrationTimezoneOffsetMinutes('')).toBeUndefined();
-    expect(parseIntegrationTimezoneOffsetMinutes('   ')).toBeUndefined();
+  it('treats blank timezone like legacy unary + on empty string (+"" → 0)', () => {
+    expect(parseIntegrationTimezoneOffsetMinutes('')).toBe(0);
+    expect(parseIntegrationTimezoneOffsetMinutes('   ')).toBe(0);
+  });
+
+  it('returns undefined when timezone is absent', () => {
     expect(parseIntegrationTimezoneOffsetMinutes(undefined)).toBeUndefined();
+    expect(parseIntegrationTimezoneOffsetMinutes(null)).toBeUndefined();
   });
 
   it('resolves a valid IANA zone to an offset in minutes', () => {

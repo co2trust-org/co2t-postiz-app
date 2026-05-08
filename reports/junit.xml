@@ -1,25 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="9" failures="0" errors="0" time="7.393">
-  <testsuite name="parseIntegrationTimezoneOffsetMinutes" errors="0" failures="0" skipped="0" timestamp="2026-05-08T20:37:38" time="5.392" tests="4">
-    <testcase classname="parseIntegrationTimezoneOffsetMinutes parses integer offset strings (dayjs utcOffset)" name="parseIntegrationTimezoneOffsetMinutes parses integer offset strings (dayjs utcOffset)" time="0.011">
+<testsuites name="jest tests" tests="10" failures="0" errors="0" time="3.616">
+  <testsuite name="parseIntegrationTimezoneOffsetMinutes" errors="0" failures="0" skipped="0" timestamp="2026-05-08T22:28:04" time="2.926" tests="5">
+    <testcase classname="parseIntegrationTimezoneOffsetMinutes parses integer offset strings (dayjs utcOffset)" name="parseIntegrationTimezoneOffsetMinutes parses integer offset strings (dayjs utcOffset)" time="0.005">
     </testcase>
-    <testcase classname="parseIntegrationTimezoneOffsetMinutes returns undefined for empty / non-numeric IANA-like garbage without throwing" name="parseIntegrationTimezoneOffsetMinutes returns undefined for empty / non-numeric IANA-like garbage without throwing" time="0.003">
+    <testcase classname="parseIntegrationTimezoneOffsetMinutes treats blank timezone like legacy unary + on empty string (+&quot;&quot; → 0)" name="parseIntegrationTimezoneOffsetMinutes treats blank timezone like legacy unary + on empty string (+&quot;&quot; → 0)" time="0.002">
     </testcase>
-    <testcase classname="parseIntegrationTimezoneOffsetMinutes resolves a valid IANA zone to an offset in minutes" name="parseIntegrationTimezoneOffsetMinutes resolves a valid IANA zone to an offset in minutes" time="0.047">
+    <testcase classname="parseIntegrationTimezoneOffsetMinutes returns undefined when timezone is absent" name="parseIntegrationTimezoneOffsetMinutes returns undefined when timezone is absent" time="0.001">
     </testcase>
-    <testcase classname="parseIntegrationTimezoneOffsetMinutes returns undefined for invalid IANA identifiers" name="parseIntegrationTimezoneOffsetMinutes returns undefined for invalid IANA identifiers" time="0.002">
+    <testcase classname="parseIntegrationTimezoneOffsetMinutes resolves a valid IANA zone to an offset in minutes" name="parseIntegrationTimezoneOffsetMinutes resolves a valid IANA zone to an offset in minutes" time="0.083">
+    </testcase>
+    <testcase classname="parseIntegrationTimezoneOffsetMinutes returns undefined for invalid IANA identifiers" name="parseIntegrationTimezoneOffsetMinutes returns undefined for invalid IANA identifiers" time="0.001">
     </testcase>
   </testsuite>
-  <testsuite name="post scheduling baseline (upstream Postiz main)" errors="0" failures="0" skipped="0" timestamp="2026-05-08T20:37:43" time="1.373" tests="5">
-    <testcase classname="post scheduling baseline (upstream Postiz main) getMissingQueuePostsPublishDateWindowUtc uses UTC now − 2h .. now + 2h (symmetric window)" name="post scheduling baseline (upstream Postiz main) getMissingQueuePostsPublishDateWindowUtc uses UTC now − 2h .. now + 2h (symmetric window)" time="0.004">
+  <testsuite name="post scheduling baseline (upstream Postiz main)" errors="0" failures="0" skipped="0" timestamp="2026-05-08T22:28:07" time="0.081" tests="5">
+    <testcase classname="post scheduling baseline (upstream Postiz main) getMissingQueuePostsPublishDateWindowUtc uses UTC now − 2h .. now + 2h (symmetric window)" name="post scheduling baseline (upstream Postiz main) getMissingQueuePostsPublishDateWindowUtc uses UTC now − 2h .. now + 2h (symmetric window)" time="0.002">
     </testcase>
-    <testcase classname="post scheduling baseline (upstream Postiz main) getMissingQueuePostsPublishDateWindowUtc documents: a QUEUE post due 3h ago is outside the recovery window (not selected)" name="post scheduling baseline (upstream Postiz main) getMissingQueuePostsPublishDateWindowUtc documents: a QUEUE post due 3h ago is outside the recovery window (not selected)" time="0.004">
+    <testcase classname="post scheduling baseline (upstream Postiz main) getMissingQueuePostsPublishDateWindowUtc documents: a QUEUE post due 3h ago is outside the recovery window (not selected)" name="post scheduling baseline (upstream Postiz main) getMissingQueuePostsPublishDateWindowUtc documents: a QUEUE post due 3h ago is outside the recovery window (not selected)" time="0.002">
     </testcase>
-    <testcase classname="post scheduling baseline (upstream Postiz main) orchestratorGetPostsListBlockedBySubscription does not block when Stripe is not configured" name="post scheduling baseline (upstream Postiz main) orchestratorGetPostsListBlockedBySubscription does not block when Stripe is not configured" time="0.005">
+    <testcase classname="post scheduling baseline (upstream Postiz main) orchestratorGetPostsListBlockedBySubscription does not block when Stripe is not configured" name="post scheduling baseline (upstream Postiz main) orchestratorGetPostsListBlockedBySubscription does not block when Stripe is not configured" time="0.001">
     </testcase>
-    <testcase classname="post scheduling baseline (upstream Postiz main) orchestratorGetPostsListBlockedBySubscription blocks when Stripe is configured and there is no subscription (workflow sees empty list)" name="post scheduling baseline (upstream Postiz main) orchestratorGetPostsListBlockedBySubscription blocks when Stripe is configured and there is no subscription (workflow sees empty list)" time="0.007">
+    <testcase classname="post scheduling baseline (upstream Postiz main) orchestratorGetPostsListBlockedBySubscription blocks when Stripe is configured and there is no subscription (workflow sees empty list)" name="post scheduling baseline (upstream Postiz main) orchestratorGetPostsListBlockedBySubscription blocks when Stripe is configured and there is no subscription (workflow sees empty list)" time="0.002">
     </testcase>
-    <testcase classname="post scheduling baseline (upstream Postiz main) orchestratorGetPostsListBlockedBySubscription does not block when Stripe is configured and a subscription exists" name="post scheduling baseline (upstream Postiz main) orchestratorGetPostsListBlockedBySubscription does not block when Stripe is configured and a subscription exists" time="0.003">
+    <testcase classname="post scheduling baseline (upstream Postiz main) orchestratorGetPostsListBlockedBySubscription does not block when Stripe is configured and a subscription exists" name="post scheduling baseline (upstream Postiz main) orchestratorGetPostsListBlockedBySubscription does not block when Stripe is configured and a subscription exists" time="0.001">
     </testcase>
   </testsuite>
 </testsuites>

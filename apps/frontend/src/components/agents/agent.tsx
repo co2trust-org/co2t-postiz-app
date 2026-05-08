@@ -266,7 +266,7 @@ const Threads: FC<{ basePath: string }> = ({ basePath }) => {
   const pathname = usePathname();
   const t = useT();
   const threads = useCallback(async () => {
-    const res = await fetch('/copilot/list');
+    const res = await fetch('/copilot/threads');
     if (!res.ok) {
       throw new Error(`threads ${res.status}`);
     }

@@ -85,11 +85,17 @@ export class IntegrationValidationTool implements AgentToolInterface {
         checkAuth(inputData, context);
         const integration = socialIntegrationList.find(
           (p) => p.identifier === inputData.platform
-        )!;
+        );
 
         if (!integration) {
+          const allowed = socialIntegrationList.map((p) => p.identifier).join(', ');
           return {
-            output: { rules: '', maxLength: 0, settings: {}, tools: [] },
+            output: {
+              rules: `Unknown platform "${inputData.platform}". Valid identifiers: ${allowed}.`,
+              maxLength: 0,
+              settings: 'No additional settings required',
+              tools: [],
+            },
           };
         }
 
