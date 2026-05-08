@@ -15,6 +15,7 @@ import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import utc from 'dayjs/plugin/utc';
 import { v4 as uuidv4 } from 'uuid';
 import { CreateTagDto } from '@gitroom/nestjs-libraries/dtos/posts/create.tag.dto';
+import { getMissingQueuePostsPublishDateWindowUtc } from '@gitroom/nestjs-libraries/scheduling/post-orchestrator-rules';
 
 dayjs.extend(isoWeek);
 dayjs.extend(weekOfYear);
@@ -34,6 +35,7 @@ export class PostsRepository {
   ) {}
 
   searchForMissingThreeHoursPosts() {
+    const publishWindow = getMissingQueuePostsPublishDateWindowUtc();
     return this._post.model.post.findMany({
       where: {
         integration: {
@@ -41,10 +43,7 @@ export class PostsRepository {
           inBetweenSteps: false,
           disabled: false,
         },
-        publishDate: {
-          gte: dayjs.utc().subtract(2, 'hour').toDate(),
-          lt: dayjs.utc().add(2, 'hour').toDate(),
-        },
+        publishDate: publishWindow,
         state: 'QUEUE',
         deletedAt: null,
         parentPostId: null,

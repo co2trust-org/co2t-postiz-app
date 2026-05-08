@@ -18,6 +18,7 @@ import { timer } from '@gitroom/helpers/utils/timer';
 import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
 import { WebhooksService } from '@gitroom/nestjs-libraries/database/prisma/webhooks/webhooks.service';
 import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { orchestratorGetPostsListBlockedBySubscription } from '@gitroom/nestjs-libraries/scheduling/post-orchestrator-rules';
 
 @Injectable()
 @Activity()
@@ -70,11 +71,16 @@ export class PostActivity {
 
   @ActivityMethod()
   async getPostsList(orgId: string, postId: string) {
-    if (process.env.STRIPE_SECRET_KEY) {
-      const subscription = await this._subscriptionService.getSubscription(orgId);
-      if (!subscription) {
-        return [];
-      }
+    const subscription = process.env.STRIPE_SECRET_KEY
+      ? await this._subscriptionService.getSubscription(orgId)
+      : null;
+    if (
+      orchestratorGetPostsListBlockedBySubscription(
+        !!process.env.STRIPE_SECRET_KEY,
+        subscription
+      )
+    ) {
+      return [];
     }
 
     const getPosts = await this._postService.getPostsRecursively(
