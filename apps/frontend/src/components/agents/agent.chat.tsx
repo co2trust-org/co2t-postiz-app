@@ -236,7 +236,9 @@ const LoadMessages: FC<{ id?: string }> = ({ id }) => {
   /** Bumps whenever we navigate away — ignore stale loads (setMessages identity is unstable across Copilot internals). */
   const requestIdRef = useRef(0);
   const setMessagesRef = useRef(setMessages);
+  const fetchRef = useRef(fetch);
   setMessagesRef.current = setMessages;
+  fetchRef.current = fetch;
 
   useEffect(() => {
     if (!id || id === 'new') {
@@ -249,7 +251,7 @@ const LoadMessages: FC<{ id?: string }> = ({ id }) => {
 
     void (async () => {
       try {
-        const res = await fetch(`/copilot/${id}/list`);
+        const res = await fetchRef.current(`/copilot/${id}/list`);
         if (seq !== requestIdRef.current) {
           return;
         }
@@ -304,7 +306,7 @@ const LoadMessages: FC<{ id?: string }> = ({ id }) => {
         setMessagesRef.current([]);
       }
     })();
-  }, [fetch, id]);
+  }, [id]);
 
   return null;
 };

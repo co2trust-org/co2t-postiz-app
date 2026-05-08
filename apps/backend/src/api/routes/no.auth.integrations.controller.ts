@@ -23,6 +23,7 @@ import {
 } from '@gitroom/backend/services/auth/permissions/permission.exception.class';
 import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
 import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
+import { parseIntegrationTimezoneOffsetMinutes } from '@gitroom/nestjs-libraries/integrations/integration.timezone-offset';
 
 @ApiTags('Integrations')
 @Controller('/integrations')
@@ -231,7 +232,7 @@ export class NoAuthIntegrationsController {
         username,
         refresh ? false : integrationProvider.isBetweenSteps,
         body.refresh,
-        +body.timezone,
+        parseIntegrationTimezoneOffsetMinutes(body.timezone),
         details
           ? AuthService.fixedEncryption(details)
           : integrationProvider.customFields

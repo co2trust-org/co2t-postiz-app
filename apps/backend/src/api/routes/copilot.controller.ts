@@ -100,6 +100,15 @@ function validatedOpenAIModel(model: string): string | null {
 }
 const MAX_THREAD_LIST_LIMIT = 200;
 const MAX_THREAD_RECALL_MESSAGES = 200;
+const MAX_THREAD_RECALL_PAGE = 500;
+
+function parseRecallPage(raw: string | undefined): number {
+  const n = parseInt(String(raw ?? '0'), 10);
+  if (!Number.isFinite(n) || n < 0) {
+    return 0;
+  }
+  return Math.min(n, MAX_THREAD_RECALL_PAGE);
+}
 
 @Controller('/copilot')
 export class CopilotController {
@@ -258,15 +267,17 @@ export class CopilotController {
   @CheckPolicies([AuthorizationActions.Create, Sections.AI])
   async getMessagesList(
     @GetOrgFromRequest() organization: Organization,
-    @Param('thread') threadId: string
+    @Param('thread') threadId: string,
+    @Query('page') pageQuery?: string
   ): Promise<any> {
     const mastra = await this._mastraService.mastra();
     const memory = await mastra.getAgent('postiz').getMemory();
+    const page = parseRecallPage(pageQuery);
     try {
       const recalled = await memory.recall({
         resourceId: organization.id,
         threadId,
-        page: 0,
+        page,
         perPage: MAX_THREAD_RECALL_MESSAGES,
       });
       const raw = recalled.messages || [];
@@ -280,12 +291,14 @@ export class CopilotController {
         uiMessages,
         messages: raw,
         total: recalled.total,
+        page,
+        perPage: MAX_THREAD_RECALL_MESSAGES,
       };
     } catch (err) {
       Logger.warn(
         `copilot thread messages failed threadId=${threadId}: ${(err as Error)?.message}`
       );
-      return { uiMessages: [], messages: [], error: 'load_failed' };
+      return { uiMessages: [], messages: [], error: 'load_failed', page };
     }
   }
 }

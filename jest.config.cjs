@@ -1,15 +1,16 @@
 /** @type {import('jest').Config} */
 module.exports = {
   testEnvironment: 'node',
-  roots: ['<rootDir>'],
-  testMatch: ['<rootDir>/tests/**/*.test.ts'],
+  roots: ['<rootDir>/tests'],
+  testMatch: ['**/*.test.ts'],
+  maxWorkers: 1,
   testPathIgnorePatterns: ['/node_modules/', '/dist/', '/\\.pnpm/'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   transform: {
     '^.+\\.tsx?$': [
       'ts-jest',
       {
-        tsconfig: '<rootDir>/tsconfig.base.json',
+        tsconfig: '<rootDir>/tests/tsconfig.json',
       },
     ],
   },
@@ -27,6 +28,7 @@ module.exports = {
   },
   collectCoverageFrom: [
     'libraries/nestjs-libraries/src/scheduling/**/*.ts',
+    'libraries/nestjs-libraries/src/integrations/integration.timezone-offset.ts',
     '!**/*.test.ts',
   ],
 };

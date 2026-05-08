@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["jest", "node"]
+  },
+  "include": [
+    "../libraries/nestjs-libraries/src/scheduling/**/*.ts",
+    "../libraries/nestjs-libraries/src/integrations/integration.timezone-offset.ts",
+    "./**/*.ts"
+  ]
+}
