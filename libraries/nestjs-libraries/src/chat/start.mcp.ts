@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { MastraService } from '@gitroom/nestjs-libraries/chat/mastra.service';
 import { MCPServer } from '@mastra/mcp';
@@ -19,6 +19,14 @@ const fixAcceptHeader = (req: Request) => {
 };
 
 export const startMcp = async (app: INestApplication) => {
+  const backendPublicUrl = process.env.NEXT_PUBLIC_BACKEND_URL?.trim();
+  if (!backendPublicUrl) {
+    Logger.warn(
+      'NEXT_PUBLIC_BACKEND_URL is not set; skipping MCP/OAuth HTTP bootstrap (core API still works)'
+    );
+    return;
+  }
+
   const mastraService = app.get(MastraService, { strict: false });
   const organizationService = app.get(OrganizationService, { strict: false });
   const oauthService = app.get(OAuthService, { strict: false });
@@ -47,8 +55,8 @@ export const startMcp = async (app: INestApplication) => {
 
   const oauthMiddleware = createOAuthMiddleware({
     oauth: {
-      resource: new URL('/mcp-oauth', process.env.NEXT_PUBLIC_BACKEND_URL!).toString(),
-      authorizationServers: [process.env.NEXT_PUBLIC_BACKEND_URL!],
+      resource: new URL('/mcp-oauth', backendPublicUrl).toString(),
+      authorizationServers: [backendPublicUrl],
       validateToken: async (token: string) => {
         const org = await resolveAuth(token);
         if (!org) {
@@ -68,7 +76,7 @@ export const startMcp = async (app: INestApplication) => {
   }
 
   app.use('/.well-known/oauth-protected-resource', async (req: Request, res: Response) => {
-    const url = new URL('/.well-known/oauth-protected-resource', process.env.NEXT_PUBLIC_BACKEND_URL);
+    const url = new URL('/.well-known/oauth-protected-resource', backendPublicUrl);
     await oauthMiddleware(req, res, url);
   });
 
@@ -84,9 +92,9 @@ export const startMcp = async (app: INestApplication) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'max-age=3600');
     res.json({
-      issuer: process.env.NEXT_PUBLIC_BACKEND_URL,
+      issuer: backendPublicUrl,
       authorization_endpoint: `${process.env.FRONTEND_URL}/oauth/authorize`,
-      token_endpoint: `${process.env.NEXT_PUBLIC_OVERRIDE_BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL}/oauth/token`,
+      token_endpoint: `${process.env.NEXT_PUBLIC_OVERRIDE_BACKEND_URL || backendPublicUrl}/oauth/token`,
       response_types_supported: ['code'],
       grant_types_supported: ['authorization_code'],
       code_challenge_methods_supported: ['S256'],
@@ -101,7 +109,7 @@ export const startMcp = async (app: INestApplication) => {
       return;
     }
 
-    const url = new URL('/mcp-oauth', process.env.NEXT_PUBLIC_BACKEND_URL);
+    const url = new URL('/mcp-oauth', backendPublicUrl);
 
     const result = await oauthMiddleware(req, res, url);
     if (!result.proceed) return;
@@ -162,7 +170,7 @@ export const startMcp = async (app: INestApplication) => {
       return;
     }
 
-    const url = new URL('/mcp', process.env.NEXT_PUBLIC_BACKEND_URL);
+    const url = new URL('/mcp', backendPublicUrl);
 
     fixAcceptHeader(req);
     // @ts-ignore
@@ -202,10 +210,7 @@ export const startMcp = async (app: INestApplication) => {
       return;
     }
 
-    const url = new URL(
-      `/mcp/${req.params.id}`,
-      process.env.NEXT_PUBLIC_BACKEND_URL
-    );
+    const url = new URL(`/mcp/${req.params.id}`, backendPublicUrl);
 
     fixAcceptHeader(req);
     await runWithContext(
@@ -248,7 +253,7 @@ export const startMcp = async (app: INestApplication) => {
       return;
     }
 
-    const url = new URL(req.originalUrl, process.env.NEXT_PUBLIC_BACKEND_URL);
+    const url = new URL(req.originalUrl, backendPublicUrl);
 
     await runWithContext(
       // @ts-ignore

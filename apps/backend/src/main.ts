@@ -44,14 +44,6 @@ async function start() {
     },
   });
 
-  // Optional MCP bootstrap can block API readiness in constrained deployments.
-  // Allow disabling it via env so core app routes still come up.
-  if (process.env.DISABLE_MCP === 'true') {
-    Logger.warn('MCP bootstrap disabled via DISABLE_MCP');
-  } else {
-    await startMcp(app);
-  }
-
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -73,17 +65,34 @@ async function start() {
   // port (see Dockerfile ENV BACK_END_PORT and var/docker/start.sh). Do not fall back to $PORT
   // here, or the API may bind the same port as Nginx or a port nginx is not proxying to.
   // For a backend-only process on Railway, set BACK_END_PORT to that service’s PORT in env.
-  const port = Number(process.env.BACK_END_PORT || 3000);
+  const rawPort = process.env.BACK_END_PORT || '3000';
+  const port = Number(rawPort);
+  const listenPort = Number.isFinite(port) && port > 0 ? port : 3000;
+  const listenHost = '0.0.0.0';
 
   try {
-    await app.listen(port);
-    console.log('Backend started successfully on port ' + port);
+    await app.listen(listenPort, listenHost);
+    Logger.log(
+      `Backend listening on http://${listenHost}:${listenPort} (nginx upstream expects this port)`
+    );
 
-    checkConfiguration(); // Do this last, so that users will see obvious issues at the end of the startup log without having to scroll up.
+    checkConfiguration();
 
-    Logger.log(`🚀 Backend is running on: http://localhost:${port}`);
+    // MCP ties into Mastra (agents, tools) and must not block HTTP readiness: nginx proxies to
+    // this port immediately; a slow or failing MCP bootstrap was causing connection refused.
+    if (process.env.DISABLE_MCP === 'true') {
+      Logger.warn('MCP bootstrap disabled via DISABLE_MCP');
+    } else {
+      void startMcp(app).catch((err) => {
+        Logger.error(
+          'MCP bootstrap failed (API continues without MCP routes)',
+          err instanceof Error ? err.stack : err
+        );
+      });
+    }
   } catch (e) {
-    Logger.error(`Backend failed to start on port ${port}`, e);
+    Logger.error(`Backend failed to start on port ${listenPort}`, e);
+    throw e;
   }
 }
 
@@ -103,4 +112,7 @@ function checkConfiguration() {
   }
 }
 
-start();
+start().catch((e) => {
+  Logger.error('Backend fatal startup error', e);
+  process.exitCode = 1;
+});
