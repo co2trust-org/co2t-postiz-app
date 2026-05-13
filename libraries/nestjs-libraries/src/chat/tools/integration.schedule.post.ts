@@ -53,6 +53,8 @@ If the user want to post 20 posts for facebook each in individual days without c
 - postsAndComments array length will be one
 
 If the tools return errors, you would need to rerun it with the right parameters, don't ask again, just run it
+
+You may omit "settings" (or pass an empty array) when scheduling if the platform DTO does not require extra keys; use integrationSchema when the platform needs dropdowns or structured settings.
 `,
       inputSchema: z.object({
         socialPost: z
@@ -106,8 +108,10 @@ If the tools return errors, you would need to rerun it with the right parameters
                       ),
                   })
                 )
+                .optional()
+                .default([])
                 .describe(
-                  'This relies on the integrationSchema tool to get the settings [input:settings]'
+                  'Key/value pairs from integrationSchema [input:settings]. Omit or pass [] when only body/attachments matter (e.g. Facebook); platform DTO may still validate.'
                 ),
             })
           )
@@ -167,11 +171,13 @@ If the tools return errors, you would need to rerun it with the right parameters
 
           const { dto, maxLength, identifier } = meta;
 
+          const settingsPairs = platform.settings ?? [];
+
           if (dto) {
             const newDTO = new dto();
             const obj = Object.assign(
               newDTO,
-              platform.settings.reduce(
+              settingsPairs.reduce(
                 (acc: AllProvidersSettings, s: { key: string; value: any }) => ({
                   ...acc,
                   [s.key]: s.value,
@@ -226,7 +232,7 @@ If the tools return errors, you would need to rerun it with the right parameters
               {
                 integration,
                 group: makeId(10),
-                settings: post.settings.reduce(
+                settings: (post.settings ?? []).reduce(
                   (acc: AllProvidersSettings, s: { key: string; value: any }) => ({
                     ...acc,
                     [s.key]: s.value,
