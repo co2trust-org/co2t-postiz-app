@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsDefined,
@@ -14,8 +14,14 @@ export class Collaborators {
   label: string;
 }
 export class InstagramDto {
+  /**
+   * Feed/Reel vs Story (not Meta's image/video media_type). UI historically allowed "";
+   * API clients may omit the key — normalize before @IsIn.
+   */
+  @Transform(({ value }) =>
+    value === '' || value === null || value === undefined ? 'post' : value
+  )
   @IsIn(['post', 'story'])
-  @IsDefined()
   post_type: 'post' | 'story';
 
   @IsOptional()
