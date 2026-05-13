@@ -1,7 +1,7 @@
 import { AgentToolInterface } from '@gitroom/nestjs-libraries/chat/agent.tool.interface';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { socialIntegrationList } from '@gitroom/nestjs-libraries/integrations/integration.manager';
 import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
 import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
@@ -83,7 +83,7 @@ If the user want to post 20 posts for facebook each in individual days without c
 
 If the tools return errors, you would need to rerun it with the right parameters, don't ask again, just run it
 
-You may omit "settings" (or pass an empty array) for many platforms. X (Twitter) and Instagram still need structured settings in the DTO; if you omit them, defaults apply (X: who_can_reply "everyone"; Instagram: post_type "post"). Prefer explicit values from integrationSchema when the user cares.
+You may omit "settings" (or pass an empty array) for many platforms. X (Twitter) and Instagram still need structured settings in the DTO; if you omit them, defaults apply (X: who_can_reply "everyone"; Instagram: post_type "post"). Instagram also requires at least one media URL on the first post (attachments). Prefer explicit values from integrationSchema when the user cares.
 `,
       inputSchema: z.object({
         socialPost: z
@@ -196,6 +196,31 @@ You may omit "settings" (or pass an empty array) for many platforms. X (Twitter)
                 },
               ]),
             };
+          }
+
+          if (
+            integration.providerIdentifier === 'instagram' ||
+            integration.providerIdentifier === 'instagram-standalone'
+          ) {
+            const firstBlock = platform.postsAndComments?.[0];
+            const attachmentUrls = (firstBlock?.attachments ?? []).filter(
+              (u: unknown): u is string =>
+                typeof u === 'string' && u.trim().length > 0
+            );
+            if (attachmentUrls.length === 0) {
+              Logger.warn(
+                `integrationSchedulePostTool: Instagram requires media org=${organizationId} integrationId=${platform.integrationId}`
+              );
+              return {
+                errors: JSON.stringify([
+                  {
+                    integrationId: platform.integrationId,
+                    error:
+                      'Instagram requires at least one image or video URL in postsAndComments[0].attachments (feed/reel/story all need media).',
+                  },
+                ]),
+              };
+            }
           }
 
           const { dto, maxLength, identifier } = meta;

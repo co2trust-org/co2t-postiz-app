@@ -8,10 +8,17 @@ import {
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
 import { timer } from '@gitroom/helpers/utils/timer';
 import dayjs from 'dayjs';
-import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
+import {
+  BadBody,
+  SocialAbstract,
+} from '@gitroom/nestjs-libraries/integrations/social.abstract';
 import { InstagramDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/instagram.dto';
 import { Integration } from '@prisma/client';
 import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
+import { Logger } from '@nestjs/common';
+import { stripHtmlValidation } from '@gitroom/helpers/utils/strip.html.validation';
+
+const INSTAGRAM_CAPTION_MAX = 2200;
 
 @Rules(
   "Instagram should have at least one attachment, if it's a story, it can have only one picture"
@@ -532,22 +539,77 @@ export class InstagramProvider
     type = 'graph.facebook.com'
   ): Promise<PostResponse[]> {
     const [firstPost] = postDetails;
+    if (!firstPost) {
+      throw new BadBody(
+        this.identifier,
+        JSON.stringify({ reason: 'instagram_empty_post_details' }),
+        '{}',
+        'No post payload to publish to Instagram.'
+      );
+    }
+
+    const igPostType =
+      firstPost.settings?.post_type === 'story' ? 'story' : 'post';
+    if (firstPost.settings) {
+      (firstPost.settings as InstagramDto).post_type = igPostType;
+    }
+
+    const captionPlain = stripHtmlValidation(
+      'normal',
+      firstPost.message || '',
+      true
+    );
+    if (captionPlain.length > INSTAGRAM_CAPTION_MAX) {
+      Logger.warn(
+        `Instagram caption too long igAccountId=${id} postRowId=${firstPost.id} len=${captionPlain.length}`
+      );
+      throw new BadBody(
+        this.identifier,
+        JSON.stringify({
+          reason: 'instagram_caption_too_long',
+          length: captionPlain.length,
+          postRowId: firstPost.id,
+        }),
+        '{}',
+        `Instagram caption must be at most ${INSTAGRAM_CAPTION_MAX} characters after stripping markup (got ${captionPlain.length}).`
+      );
+    }
+
+    const mediaList =
+      firstPost.media?.filter(
+        (m) => m && typeof m.path === 'string' && m.path.trim().length > 0
+      ) || [];
+    if (mediaList.length === 0) {
+      Logger.warn(
+        `Instagram publish blocked: no media URLs igAccountId=${id} postRowId=${firstPost.id} integrationId=${integration.id}`
+      );
+      throw new BadBody(
+        this.identifier,
+        JSON.stringify({
+          reason: 'instagram_missing_media',
+          postRowId: firstPost.id,
+          integrationId: integration.id,
+        }),
+        '{}',
+        'Instagram requires at least one image or video with a valid URL before calling the Graph API.'
+      );
+    }
+
+    const mediaCount = mediaList.length;
     console.log('in progress', id);
-    const isStory = firstPost.settings.post_type === 'story';
-    const isTrialReel = !!firstPost.settings.is_trial_reel;
+    const isStory = igPostType === 'story';
+    const isTrialReel = !!firstPost.settings?.is_trial_reel;
     const medias = await Promise.all(
-      firstPost?.media?.map(async (m) => {
+      mediaList.map(async (m) => {
         const caption =
-          firstPost.media?.length === 1
+          mediaCount === 1
             ? `&caption=${encodeURIComponent(firstPost.message)}`
             : ``;
         const isCarousel =
-          (firstPost?.media?.length || 0) > 1 && !isStory
-            ? `&is_carousel_item=true`
-            : ``;
+          mediaCount > 1 && !isStory ? `&is_carousel_item=true` : ``;
         const mediaType =
           m.path.indexOf('.mp4') > -1
-            ? firstPost?.media?.length === 1
+            ? mediaCount === 1
               ? isStory
                 ? `video_url=${m.path}&media_type=STORIES`
                 : `video_url=${m.path}&media_type=REELS&thumb_offset=${
@@ -605,7 +667,7 @@ export class InstagramProvider
         console.log('in progress3', id);
 
         return photoId;
-      }) || []
+      })
     );
 
     if (isStory && medias.length > 1) {

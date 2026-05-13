@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   ValidationPipe,
 } from '@nestjs/common';
@@ -37,6 +38,9 @@ import { timer } from '@gitroom/helpers/utils/timer';
 import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
 import { RefreshToken } from '@gitroom/nestjs-libraries/integrations/social.abstract';
 import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
+import { stripHtmlValidation } from '@gitroom/helpers/utils/strip.html.validation';
+
+const INSTAGRAM_CAPTION_MAX = 2200;
 
 type PostWithConditionals = Post & {
   integration?: Integration;
@@ -795,6 +799,54 @@ export class PostsService {
     } catch (err) {}
   }
 
+  private async assertInstagramCreateConstraints(
+    orgId: string,
+    post: CreatePostDto['posts'][number]
+  ) {
+    const integId = post.integration.id;
+    const withMeta = post.integration as unknown as Integration;
+    let providerIdentifier = withMeta?.providerIdentifier;
+    if (!providerIdentifier) {
+      const loaded = await this._integrationService.getIntegrationById(
+        orgId,
+        integId
+      );
+      providerIdentifier = loaded?.providerIdentifier;
+    }
+    if (
+      providerIdentifier !== 'instagram' &&
+      providerIdentifier !== 'instagram-standalone'
+    ) {
+      return;
+    }
+
+    const first = post.value?.[0];
+    const paths =
+      first?.image
+        ?.map((m) => m?.path)
+        .filter(
+          (p): p is string => typeof p === 'string' && p.trim().length > 0
+        ) ?? [];
+    if (paths.length === 0) {
+      Logger.warn(
+        `createPost: Instagram missing media orgId=${orgId} integrationId=${integId}`
+      );
+      throw new BadRequestException(
+        'Instagram posts require at least one image or video attachment.'
+      );
+    }
+
+    const strip = stripHtmlValidation('normal', first?.content ?? '', true);
+    if (strip.length > INSTAGRAM_CAPTION_MAX) {
+      Logger.warn(
+        `createPost: Instagram caption too long orgId=${orgId} integrationId=${integId} len=${strip.length}`
+      );
+      throw new BadRequestException(
+        `Instagram caption must be at most ${INSTAGRAM_CAPTION_MAX} characters after stripping markup (current length: ${strip.length}).`
+      );
+    }
+  }
+
   async createPost(orgId: string, body: CreatePostDto): Promise<any[]> {
     const postList = [];
     for (const post of body.posts) {
@@ -875,6 +927,7 @@ export class PostsService {
       }
 
       try {
+        await this.assertInstagramCreateConstraints(orgId, post);
         const messages = (post.value || []).map((p) => p.content);
         const updateContent = !body.shortLink
           ? messages
