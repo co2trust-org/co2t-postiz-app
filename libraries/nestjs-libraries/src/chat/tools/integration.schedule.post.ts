@@ -20,6 +20,35 @@ function countCharacters(text: string, type: string): number {
   return weightedLength(text);
 }
 
+/** Plain key/value from the tool before DTO validation / createPost — fills required platform fields when the agent omits settings[]. */
+function applyProviderScheduleSettingsDefaults(
+  providerIdentifier: string,
+  partial: Record<string, unknown>
+): Record<string, unknown> {
+  const out = { ...partial };
+  if (providerIdentifier === 'x') {
+    if (
+      out.who_can_reply_post == null ||
+      (typeof out.who_can_reply_post === 'string' &&
+        out.who_can_reply_post.trim() === '')
+    ) {
+      out.who_can_reply_post = 'everyone';
+    }
+  }
+  if (
+    providerIdentifier === 'instagram' ||
+    providerIdentifier === 'instagram-standalone'
+  ) {
+    if (
+      out.post_type == null ||
+      (typeof out.post_type === 'string' && out.post_type.trim() === '')
+    ) {
+      out.post_type = 'post';
+    }
+  }
+  return out;
+}
+
 @Injectable()
 export class IntegrationSchedulePostTool implements AgentToolInterface {
   constructor(
@@ -54,7 +83,7 @@ If the user want to post 20 posts for facebook each in individual days without c
 
 If the tools return errors, you would need to rerun it with the right parameters, don't ask again, just run it
 
-You may omit "settings" (or pass an empty array) when scheduling if the platform DTO does not require extra keys; use integrationSchema when the platform needs dropdowns or structured settings.
+You may omit "settings" (or pass an empty array) for many platforms. X (Twitter) and Instagram still need structured settings in the DTO; if you omit them, defaults apply (X: who_can_reply "everyone"; Instagram: post_type "post"). Prefer explicit values from integrationSchema when the user cares.
 `,
       inputSchema: z.object({
         socialPost: z
@@ -175,16 +204,18 @@ You may omit "settings" (or pass an empty array) when scheduling if the platform
 
           if (dto) {
             const newDTO = new dto();
-            const obj = Object.assign(
-              newDTO,
-              settingsPairs.reduce(
-                (acc: AllProvidersSettings, s: { key: string; value: any }) => ({
-                  ...acc,
-                  [s.key]: s.value,
-                }),
-                {} as AllProvidersSettings
-              )
+            const fromKv = settingsPairs.reduce(
+              (acc: Record<string, unknown>, s: { key: string; value: any }) => ({
+                ...acc,
+                [s.key]: s.value,
+              }),
+              {} as Record<string, unknown>
             );
+            const withDefaults = applyProviderScheduleSettingsDefaults(
+              integration.providerIdentifier,
+              fromKv
+            );
+            const obj = Object.assign(newDTO, withDefaults);
             const errors = await validate(obj);
             if (errors.length) {
               return {
@@ -232,15 +263,23 @@ You may omit "settings" (or pass an empty array) when scheduling if the platform
               {
                 integration,
                 group: makeId(10),
-                settings: (post.settings ?? []).reduce(
-                  (acc: AllProvidersSettings, s: { key: string; value: any }) => ({
-                    ...acc,
-                    [s.key]: s.value,
-                  }),
-                  {
+                settings: (() => {
+                  const fromKv = (post.settings ?? []).reduce(
+                    (acc: Record<string, unknown>, s: { key: string; value: any }) => ({
+                      ...acc,
+                      [s.key]: s.value,
+                    }),
+                    {} as Record<string, unknown>
+                  );
+                  const withDefaults = applyProviderScheduleSettingsDefaults(
+                    integration.providerIdentifier,
+                    fromKv
+                  );
+                  return {
                     __type: integration.providerIdentifier,
-                  } as AllProvidersSettings
-                ),
+                    ...withDefaults,
+                  } as AllProvidersSettings;
+                })(),
                 value: post.postsAndComments.map((p: any) => ({
                   content: p.content,
                   id: makeId(10),
